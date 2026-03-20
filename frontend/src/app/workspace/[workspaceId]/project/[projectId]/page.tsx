@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
-import { PresenceAvatars } from '@/components/ui/Avatar';
+import { Avatar, PresenceAvatars } from '@/components/ui/Avatar';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { PROJECTS, SECTIONS, TASKS, USERS } from '@/data/seed';
 import { ViewType } from '@/types';
@@ -15,6 +15,7 @@ import {
   Share2, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { formatDate, isOverdue, PRIORITY_CONFIG } from '@/lib/utils';
+import { Priority } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const VIEW_TABS: { key: ViewType; label: string; icon: React.ReactNode }[] = [
@@ -146,7 +147,7 @@ function ListView({ sections, tasks, onTaskClick }: any) {
                           cursor: 'pointer',
                           borderBottom: i < secTasks.length - 1 ? '1px solid var(--border-subtle)' : 'none',
                           transition: 'background var(--transition)',
-                          borderLeft: `3px solid ${PRIORITY_CONFIG[task.priority].color}`,
+                          borderLeft: `3px solid ${PRIORITY_CONFIG[task.priority as Priority].color}`,
                         }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -224,7 +225,7 @@ function CalendarView({ tasks, onTaskClick }: any) {
                 <div
                   key={task.id}
                   onClick={() => onTaskClick(task.id)}
-                  style={{ marginTop: 3, padding: '1px 5px', borderRadius: 3, background: PRIORITY_CONFIG[task.priority].color + '20', borderLeft: `2px solid ${PRIORITY_CONFIG[task.priority].color}`, fontSize: 10.5, color: 'var(--text-primary)', cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontWeight: 500 }}
+                  style={{ marginTop: 3, padding: '1px 5px', borderRadius: 3, background: PRIORITY_CONFIG[task.priority as Priority].color + '20', borderLeft: `2px solid ${PRIORITY_CONFIG[task.priority as Priority].color}`, fontSize: 10.5, color: 'var(--text-primary)', cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontWeight: 500 }}
                 >
                   {task.title}
                 </div>

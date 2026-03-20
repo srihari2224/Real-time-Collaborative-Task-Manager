@@ -34,11 +34,10 @@ export function TaskCard({ task, isDragging = false }: TaskCardProps) {
   return (
     <div
       ref={setNodeRef}
-      style={style}
+      style={{ borderLeftColor: priorityColor, ...style }}
       {...attributes}
       {...listeners}
       className={`task-card ${isDragging ? 'drag-overlay' : ''}`}
-      style={{ borderLeftColor: priorityColor, ...style }}
       onClick={(e) => {
         e.stopPropagation();
         openTaskPanel(task.id);

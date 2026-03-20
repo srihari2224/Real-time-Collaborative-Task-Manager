@@ -203,7 +203,7 @@ export default function AuthPage() {
                   {loginForm.formState.isSubmitting ? 'Signing in...' : <>Sign In <ArrowRight size={14} /></>}
                 </button>
                 <GoogleBtn onClick={handleGoogleSSO} />
-                <Demo onClick={() => loginForm.setValue('email', 'sarah@acme.com') && loginForm.setValue('password', 'demo123')} />
+                <Demo onClick={() => { loginForm.setValue('email', 'sarah@acme.com'); loginForm.setValue('password', 'demo123'); }} />
               </motion.form>
             )}
 
