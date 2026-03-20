@@ -1,35 +1,35 @@
 'use client';
 
-// This page handles Supabase OAuth redirects for BOTH:
-//   1. Hash-fragment implicit flow:  /auth/callback#access_token=...
-//   2. PKCE code flow:               /auth/callback?code=...  (handled by route.ts)
+// Handles Supabase OAuth redirects for BOTH:
+//   1. PKCE code flow:               /auth/callback?code=...  (was previously in route.ts)
+//   2. Implicit hash-fragment flow:  /auth/callback#access_token=...  (Google OAuth)
 //
-// Supabase JS automatically reads the #access_token from the URL hash
-// when you call getSession() or onAuthStateChange, so we just need to
-// wait for that, store the session, and navigate.
+// Next.js does not allow both route.ts AND page.tsx in the same directory,
+// so both flows are handled here client-side.
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 import { CheckSquare } from 'lucide-react';
 
-export default function AuthCallbackPage() {
+function CallbackContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { setUser, setToken, setSession, logout } = useAuthStore();
 
   useEffect(() => {
     let done = false;
 
-    // ✅ Clean the ugly #access_token=... from the URL immediately
+    // ✅ Strip #access_token=... hash from URL bar immediately
     if (typeof window !== 'undefined' && window.location.hash) {
-      window.history.replaceState({}, document.title, window.location.pathname);
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
     }
 
-    const handleSession = async (session: any) => {
+    const navigateAfterSession = async (session: any) => {
       if (done) return;
       done = true;
 
@@ -45,29 +45,38 @@ export default function AuthCallbackPage() {
       try {
         const syncRes = await api.post('/api/v1/auth/sync', {});
         setUser(syncRes.data?.data ?? syncRes.data);
-
         const wsRes = await api.get('/api/v1/workspaces');
         const workspaces = wsRes.data?.data ?? wsRes.data ?? [];
         router.replace(workspaces.length > 0 ? `/workspace/${workspaces[0].id}` : '/auth');
       } catch {
-        // Backend unreachable — still navigate home so user isn't stuck
         router.replace('/');
       }
     };
 
-    // Supabase JS v2 automatically parses #access_token from the hash.
-    // onAuthStateChange fires immediately if a session is already detected.
+    // ── Path 1: PKCE code flow (?code=...) ──────────────────────────────────
+    const code = searchParams?.get('code');
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ data, error }) => {
+          navigateAfterSession(error || !data.session ? null : data.session);
+        })
+        .catch(() => navigateAfterSession(null));
+      return;
+    }
+
+    // ── Path 2: Implicit hash flow (#access_token=...) ──────────────────────
+    // Supabase JS automatically parses the hash on onAuthStateChange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) handleSession(session);
+      if (session) navigateAfterSession(session);
     });
 
-    // Also check immediately in case the event already fired
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) handleSession(session);
+      if (session) navigateAfterSession(session);
+      else setTimeout(() => { if (!done) navigateAfterSession(null); }, 3000);
     });
 
     return () => { subscription.unsubscribe(); };
-  }, [router, setUser, setToken, setSession, logout]);
+  }, [router, searchParams, setUser, setToken, setSession, logout]);
 
   return (
     <div style={{
@@ -82,5 +91,18 @@ export default function AuthCallbackPage() {
       </div>
       <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Completing sign-in…</p>
     </div>
+  );
+}
+
+// useSearchParams requires Suspense in Next.js
+export default function AuthCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-base)' }}>
+        <CheckSquare size={28} style={{ color: 'var(--accent)', opacity: 0.5 }} />
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
   );
 }
