@@ -37,7 +37,7 @@ export const buildApp = async () => {
         /\.vercel\.app$/.test(origin) ||
         /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
         /\.onrender\.com$/.test(origin);
-      cb(null, isAllowed ? true : new Error(`CORS: origin ${origin} not allowed`));
+      cb(null, isAllowed ? origin : false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
