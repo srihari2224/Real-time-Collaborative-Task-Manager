@@ -179,3 +179,23 @@ export const tasksApi = {
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`${BASE}/tasks/${id}/attachments/${attachmentId}`),
 };
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+export interface ApiNotification {
+  id: string;
+  user_id: string;
+  type: string;
+  entity_id: string | null;
+  entity_type: string | null;
+  is_read: boolean;
+  message: string | null;
+  created_at: string;
+}
+
+export const notificationsApi = {
+  list: () => api.get(`${BASE}/notifications`).then(unwrap<ApiNotification[]>),
+  markRead: (id: string) => api.patch(`${BASE}/notifications/${id}/read`),
+  markAllRead: () => api.patch(`${BASE}/notifications/read-all`),
+};
+

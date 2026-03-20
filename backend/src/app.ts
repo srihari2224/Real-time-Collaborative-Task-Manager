@@ -9,6 +9,7 @@ import authRoutes      from './routes/auth.js';
 import workspaceRoutes from './routes/workspaces.js';
 import projectRoutes   from './routes/projects.js';
 import taskRoutes      from './routes/tasks.js';
+import notificationRoutes from './routes/notifications.js';
 
 export const buildApp = async () => {
   const app = Fastify({
@@ -54,10 +55,11 @@ export const buildApp = async () => {
 
   // Routes
   const prefix = `/api/${env.node.apiVersion}`;
-  await app.register(authRoutes,      { prefix: `${prefix}/auth` });
-  await app.register(workspaceRoutes, { prefix: `${prefix}/workspaces` });
-  await app.register(projectRoutes,   { prefix: `${prefix}/projects` });
-  await app.register(taskRoutes,      { prefix: `${prefix}/tasks` });
+  await app.register(authRoutes,         { prefix: `${prefix}/auth` });
+  await app.register(workspaceRoutes,    { prefix: `${prefix}/workspaces` });
+  await app.register(projectRoutes,      { prefix: `${prefix}/projects` });
+  await app.register(taskRoutes,         { prefix: `${prefix}/tasks` });
+  await app.register(notificationRoutes, { prefix: `${prefix}/notifications` });
 
   // Error handler
   app.setErrorHandler((err: any, _req, reply) => {

@@ -72,3 +72,21 @@ export const update = async (id: string, data: Partial<Pick<Task, 'title' | 'des
 export const remove = async (id: string): Promise<void> => {
   await query('DELETE FROM tasks WHERE id = $1', [id]);
 };
+
+// Returns the workspace_id for a given task via tasks → projects join
+export const findWorkspaceIdByTaskId = async (taskId: string): Promise<string | null> => {
+  const { rows } = await query(
+    `SELECT p.workspace_id FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = $1 LIMIT 1`,
+    [taskId]
+  );
+  return (rows[0] as { workspace_id: string } | undefined)?.workspace_id ?? null;
+};
+
+// Returns the workspace_id for a given project
+export const findWorkspaceIdByProjectId = async (projectId: string): Promise<string | null> => {
+  const { rows } = await query(
+    `SELECT workspace_id FROM projects WHERE id = $1 LIMIT 1`,
+    [projectId]
+  );
+  return (rows[0] as { workspace_id: string } | undefined)?.workspace_id ?? null;
+};

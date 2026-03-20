@@ -10,15 +10,32 @@ export const requireAuth = async (req: FastifyRequest, reply: FastifyReply): Pro
     return unauthorized(reply, 'Missing or invalid Authorization header') as unknown as void;
   }
   const token = authHeader.slice(7);
-  const { user, error } = await verifySupabaseToken(token);
-  if (error || !user) {
+  const { user: supabaseUser, error } = await verifySupabaseToken(token);
+  if (error || !supabaseUser) {
     return unauthorized(reply, 'Invalid or expired token') as unknown as void;
   }
+
+  // Upsert user into local DB (picks up full_name / avatar from Supabase user_metadata)
   try {
-    const dbUser = await userRepository.findById(user.id);
-    req.user = dbUser ?? { id: user.id, email: user.email ?? '', full_name: null, avatar_url: null, created_at: new Date(), updated_at: new Date() };
+    const meta = (supabaseUser.user_metadata ?? {}) as Record<string, string>;
+    const full_name = meta.full_name ?? meta.name ?? null;
+    const avatar_url = meta.avatar_url ?? meta.picture ?? null;
+    req.user = await userRepository.upsertUser({
+      id: supabaseUser.id,
+      email: supabaseUser.email ?? '',
+      full_name,
+      avatar_url,
+    });
   } catch {
-    req.user = { id: user.id, email: user.email ?? '', full_name: null, avatar_url: null, created_at: new Date(), updated_at: new Date() };
+    // DB unavailable — build minimal user from token payload
+    req.user = {
+      id: supabaseUser.id,
+      email: supabaseUser.email ?? '',
+      full_name: null,
+      avatar_url: null,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
   }
 };
 
