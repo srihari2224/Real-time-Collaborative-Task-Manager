@@ -8,6 +8,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ViewType } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { projectsApi, tasksApi, type ApiProject, type ApiTask } from '@/lib/apiClient';
+import { AssigneePicker, type AssigneeInfo } from '@/components/ui/AssigneePicker';
 import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
@@ -238,6 +239,7 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
   const [priority, setPriority] = useState<ApiTask['priority']>('medium');
   const [status, setStatus] = useState<ApiTask['status']>('todo');
   const [dueDate, setDueDate] = useState('');
+  const [assignee, setAssignee] = useState<AssigneeInfo | null>(null);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -251,6 +253,7 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
         priority,
         status,
         dueDate: dueDate || undefined,
+        assigneeId: assignee?.id ?? null,
       });
       toast.success('Task created!');
       onCreated(task);
@@ -300,6 +303,10 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
                 <option value="done">Done</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Assign To</label>
+            <AssigneePicker value={assignee} onChange={setAssignee} placeholder="Enter email to assign..." />
           </div>
           <div>
             <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Due Date</label>

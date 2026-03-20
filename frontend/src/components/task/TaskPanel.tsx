@@ -14,6 +14,7 @@ import { ChatTab } from '@/components/chat/ChatTab';
 import { PresenceAvatars } from '@/components/ui/Avatar';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { formatDate, isOverdue, formatRelativeTime, PRIORITY_CONFIG, formatFileSize } from '@/lib/utils';
+import { AssigneePicker, type AssigneeInfo } from '@/components/ui/AssigneePicker';
 import toast from 'react-hot-toast';
 
 const TABS = [
@@ -205,15 +206,25 @@ function OverviewTab({ task, overdue, onUpdate }: OverviewTabProps) {
   const [description, setDescription] = useState(task.description ?? '');
   const [priority, setPriority] = useState<ApiTask['priority']>(task.priority);
   const [savingDesc, setSavingDesc] = useState(false);
+  const [assignee, setAssignee] = useState<AssigneeInfo | null>(
+    task.assignee
+      ? { id: task.assignee.id, email: task.assignee.email, full_name: task.assignee.full_name, avatar_url: task.assignee.avatar_url }
+      : null
+  );
   // Local-only subtasks (no backend endpoint for subtasks yet)
   const [subtasks, setSubtasks] = useState<{ id: string; title: string; is_completed: boolean }[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
 
-  // Sync description & priority if task changes
+  // Sync description & priority & assignee if task changes
   useEffect(() => {
     setDescription(task.description ?? '');
     setPriority(task.priority);
-  }, [task.id, task.description, task.priority]);
+    setAssignee(
+      task.assignee
+        ? { id: task.assignee.id, email: task.assignee.email, full_name: task.assignee.full_name, avatar_url: task.assignee.avatar_url }
+        : null
+    );
+  }, [task.id, task.description, task.priority, task.assignee]);
 
   const saveDescription = async () => {
     if (description === (task.description ?? '')) return;
@@ -253,11 +264,22 @@ function OverviewTab({ task, overdue, onUpdate }: OverviewTabProps) {
       {/* Meta fields */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <MetaField label="Assignee" icon={<User size={12} />}>
-          {assignees.length > 0 ? (
-            <PresenceAvatars users={assignees} size={24} />
-          ) : (
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Unassigned</span>
-          )}
+          <AssigneePicker
+            value={assignee}
+            onChange={async (newAssignee) => {
+              setAssignee(newAssignee);
+              try {
+                const updated = await tasksApi.update(task.id, { assigneeId: newAssignee?.id ?? null });
+                onUpdate(updated);
+                toast.success(newAssignee ? `Assigned to ${newAssignee.full_name || newAssignee.email}` : 'Assignee removed', { duration: 1500, id: 'assignee' });
+              } catch {
+                toast.error('Failed to update assignee');
+                // revert
+                setAssignee(task.assignee ? { id: task.assignee.id, email: task.assignee.email, full_name: task.assignee.full_name, avatar_url: task.assignee.avatar_url } : null);
+              }
+            }}
+            placeholder="Enter email to assign..."
+          />
         </MetaField>
 
         <MetaField label="Due Date" icon={<Calendar size={12} />}>
