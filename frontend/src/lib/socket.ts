@@ -33,14 +33,24 @@ export function disconnectSocket() {
   socket = null;
 }
 
-// Event names matching the backend
+// Event names matching the backend (src/websocket/events.ts)
 export const SOCKET_EVENTS = {
-  JOIN_WORKSPACE: 'join:workspace',
-  LEAVE_WORKSPACE: 'leave:workspace',
-  JOIN_TASK: 'join:task',
-  LEAVE_TASK: 'leave:task',
-  TASK_CREATED: 'task:created',
-  TASK_UPDATED: 'task:updated',
-  TASK_DELETED: 'task:deleted',
-  COMMENT_ADDED: 'comment:added',
-};
+  // Rooms
+  JOIN_WORKSPACE:  'join_workspace',
+  LEAVE_WORKSPACE: 'leave_workspace',
+  JOIN_TASK:       'join_task',
+  LEAVE_TASK:      'leave_task',
+  // Task events
+  TASK_CREATED:    'task:created',
+  TASK_UPDATED:    'task:updated',
+  TASK_DELETED:    'task:deleted',
+  // Comment events
+  COMMENT_CREATED: 'comment:created',
+  COMMENT_DELETED: 'comment:deleted',
+  // Member events
+  MEMBER_JOINED:   'member:joined',
+  MEMBER_LEFT:     'member:left',
+  // Presence
+  USER_PRESENCE:   'user:presence',
+  ERROR:           'error',
+} as const;

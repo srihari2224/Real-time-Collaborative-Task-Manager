@@ -71,11 +71,39 @@ export interface ApiComment {
   user?: ApiUser;
 }
 
+export interface ApiAttachment {
+  id: string;
+  task_id: string;
+  file_url: string;
+  file_name: string;
+  file_size: number;
+  file_type: string | null;
+  uploaded_by: string;
+  uploaded_at: string;
+  uploader?: ApiUser;
+}
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function unwrap<T>(res: { data: { data: T } | T }): T {
   const d = res.data as any;
   return d?.data !== undefined ? d.data : d;
+}
+
+// Paginated response: backend returns { data: { tasks, pagination } }
+function unwrapPaginated<T>(res: { data: any }): T[] {
+  const d = res.data as any;
+  // Handle { data: { tasks: [...], pagination: {...} } }
+  if (d?.data && typeof d.data === 'object' && !Array.isArray(d.data)) {
+    // Find the first array value in d.data (tasks, items, etc.)
+    const arrays = Object.values(d.data).filter((v) => Array.isArray(v));
+    if (arrays.length > 0) return arrays[0] as T[];
+  }
+  // Handle { data: [...] }
+  if (Array.isArray(d?.data)) return d.data as T[];
+  // Handle plain array
+  if (Array.isArray(d)) return d as T[];
+  return [];
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -120,7 +148,7 @@ export const projectsApi = {
 
 export const tasksApi = {
   listByProject: (projectId: string) =>
-    api.get(`${BASE}/tasks/project/${projectId}`).then(unwrap<ApiTask[]>),
+    api.get(`${BASE}/tasks/project/${projectId}`).then(unwrapPaginated<ApiTask>),
   get: (id: string) => api.get(`${BASE}/tasks/${id}`).then(unwrap<ApiTask>),
   create: (data: {
     projectId: string;
@@ -131,8 +159,12 @@ export const tasksApi = {
     assigneeId?: string | null;
     dueDate?: string | null;
   }) => api.post(`${BASE}/tasks`, data).then(unwrap<ApiTask>),
-  update: (id: string, data: Partial<Omit<ApiTask, 'id' | 'project_id' | 'created_by' | 'created_at' | 'updated_at'>>) =>
-    api.put(`${BASE}/tasks/${id}`, data).then(unwrap<ApiTask>),
+  update: (
+    id: string,
+    data: Partial<Omit<ApiTask, 'id' | 'project_id' | 'created_by' | 'created_at' | 'updated_at'>> & {
+      assigneeId?: string | null;
+    }
+  ) => api.put(`${BASE}/tasks/${id}`, data).then(unwrap<ApiTask>),
   delete: (id: string) => api.delete(`${BASE}/tasks/${id}`),
   // Comments
   listComments: (id: string) =>
@@ -141,4 +173,9 @@ export const tasksApi = {
     api.post(`${BASE}/tasks/${id}/comments`, { content }).then(unwrap<ApiComment>),
   deleteComment: (id: string, commentId: string) =>
     api.delete(`${BASE}/tasks/${id}/comments/${commentId}`),
+  // Attachments
+  listAttachments: (id: string) =>
+    api.get(`${BASE}/tasks/${id}/attachments`).then(unwrap<ApiAttachment[]>),
+  deleteAttachment: (id: string, attachmentId: string) =>
+    api.delete(`${BASE}/tasks/${id}/attachments/${attachmentId}`),
 };

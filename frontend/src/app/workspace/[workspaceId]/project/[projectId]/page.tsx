@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
@@ -8,6 +8,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ViewType } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
 import { projectsApi, tasksApi, type ApiProject, type ApiTask } from '@/lib/apiClient';
+import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
   LayoutGrid, List, Calendar, BarChart2, Filter,
@@ -66,6 +67,49 @@ export default function ProjectPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // ── Socket: real-time task updates ──────────────────────────────────────
+  useEffect(() => {
+    if (!workspaceId) return;
+    let isMounted = true;
+    let s: Awaited<ReturnType<typeof getSocket>> | null = null;
+
+    getSocket().then((socket) => {
+      if (!isMounted) return;
+      s = socket;
+      socket.emit(SOCKET_EVENTS.JOIN_WORKSPACE, workspaceId);
+
+      socket.on(SOCKET_EVENTS.TASK_CREATED, (data: { task: ApiTask }) => {
+        if (!isMounted) return;
+        if (data.task.project_id === projectId) {
+          setTasks((prev) => prev.some((t) => t.id === data.task.id) ? prev : [...prev, data.task]);
+          toast.success(`New task: ${data.task.title}`, { duration: 2000, id: `task-created-${data.task.id}` });
+        }
+      });
+
+      socket.on(SOCKET_EVENTS.TASK_UPDATED, (data: { task: ApiTask }) => {
+        if (!isMounted) return;
+        if (data.task.project_id === projectId) {
+          setTasks((prev) => prev.map((t) => t.id === data.task.id ? data.task : t));
+        }
+      });
+
+      socket.on(SOCKET_EVENTS.TASK_DELETED, (data: { taskId: string }) => {
+        if (!isMounted) return;
+        setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
+      });
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+      if (s) {
+        s.emit(SOCKET_EVENTS.LEAVE_WORKSPACE, workspaceId);
+        s.off(SOCKET_EVENTS.TASK_CREATED);
+        s.off(SOCKET_EVENTS.TASK_UPDATED);
+        s.off(SOCKET_EVENTS.TASK_DELETED);
+      }
+    };
+  }, [workspaceId, projectId]);
+
   const completedTasks = tasks.filter((t) => t.status === 'done').length;
   const progressPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
 
@@ -77,7 +121,7 @@ export default function ProjectPage() {
     position: STATUS_ORDER.indexOf(status),
   }));
 
-  // Map API tasks to the shape KanbanBoard expects (using status as section_id)
+  // Map API tasks to the shape KanbanBoard expects
   const kanbanTasks = tasks.map((t) => ({
     ...t,
     section_id: t.status,
@@ -219,16 +263,12 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
         onClick={(e) => e.stopPropagation()}
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 400, maxWidth: '90vw' }}
       >
@@ -238,11 +278,8 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input
-            autoFocus
-            className="input"
-            placeholder="Task title..."
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            autoFocus className="input" placeholder="Task title..."
+            value={title} onChange={(e) => setTitle(e.target.value)}
           />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>

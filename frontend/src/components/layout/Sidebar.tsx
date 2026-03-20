@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useParams } from 'next/navigation';
 import {
   Home, CheckSquare, Bell, Settings, LogOut, Plus,
-  ChevronDown, FolderKanban, Loader2
+  ChevronDown, FolderKanban, Loader2, X
 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -13,6 +13,7 @@ import { getInitials } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
+import toast from 'react-hot-toast';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -25,6 +26,14 @@ export function Sidebar() {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
+
+  // Modal states
+  const [showNewWorkspace, setShowNewWorkspace] = useState(false);
+  const [showNewProject, setShowNewProject] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectColor, setNewProjectColor] = useState('#6366f1');
+  const [creating, setCreating] = useState(false);
 
   const workspaceId = params?.workspaceId as string | undefined;
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId) ?? workspaces[0];
@@ -55,6 +64,44 @@ export function Sidebar() {
     await supabase.auth.signOut();
     logout();
     router.push('/auth');
+  };
+
+  const handleCreateWorkspace = async () => {
+    if (!newWorkspaceName.trim()) return;
+    setCreating(true);
+    try {
+      const ws = await workspacesApi.create({ name: newWorkspaceName.trim() });
+      setWorkspaces((prev) => [...prev, ws]);
+      setNewWorkspaceName('');
+      setShowNewWorkspace(false);
+      router.push(`/workspace/${ws.id}`);
+      toast.success('Workspace created!');
+    } catch {
+      toast.error('Failed to create workspace');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProjectName.trim() || !currentWorkspace) return;
+    setCreating(true);
+    try {
+      const proj = await projectsApi.create({
+        workspaceId: currentWorkspace.id,
+        name: newProjectName.trim(),
+        color: newProjectColor,
+      });
+      setProjects((prev) => [...prev, proj]);
+      setNewProjectName('');
+      setShowNewProject(false);
+      router.push(`/workspace/${currentWorkspace.id}/project/${proj.id}`);
+      toast.success('Project created!');
+    } catch {
+      toast.error('Failed to create project');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const wsLetter = currentWorkspace?.name?.[0]?.toUpperCase() ?? 'W';
@@ -96,7 +143,11 @@ export function Sidebar() {
                     )}
                   </div>
                 ))}
-                <button onClick={() => {}} className="sidebar-nav-item" style={{ width: '100%', border: 'none', cursor: 'pointer', marginTop: 4 }}>
+                <button
+                  onClick={() => { setShowNewWorkspace(true); setWorkspaceSwitcherOpen(false); }}
+                  className="sidebar-nav-item"
+                  style={{ width: '100%', border: 'none', cursor: 'pointer', marginTop: 4 }}
+                >
                   <Plus size={13} /> Create Workspace
                 </button>
               </div>
@@ -121,7 +172,12 @@ export function Sidebar() {
         <div className="sidebar-section" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div className="sidebar-section-header">
             <span>Projects</span>
-            <button className="sidebar-icon-btn" title="New project">
+            <button
+              className="sidebar-icon-btn"
+              title="New project"
+              onClick={() => setShowNewProject(true)}
+              disabled={!currentWorkspace}
+            >
               <Plus size={13} />
             </button>
           </div>
@@ -131,7 +187,14 @@ export function Sidebar() {
                 <Loader2 size={12} className="spin" /> Loading...
               </div>
             ) : projects.length === 0 ? (
-              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>No projects yet</div>
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
+                No projects yet
+                {currentWorkspace && (
+                  <button onClick={() => setShowNewProject(true)} style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-display)' }}>
+                    + Create first project
+                  </button>
+                )}
+              </div>
             ) : (
               projects.map((project) => {
                 const isActive = pathname.includes(project.id);
@@ -178,6 +241,90 @@ export function Sidebar() {
           </button>
         </div>
       </nav>
+
+      {/* ── New Workspace Modal ──────────────────────────────────── */}
+      <AnimatePresence>
+        {showNewWorkspace && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => setShowNewWorkspace(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 360, maxWidth: '90vw' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>New Workspace</h3>
+                <button onClick={() => setShowNewWorkspace(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={15} /></button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <input
+                  autoFocus className="input" placeholder="Workspace name"
+                  value={newWorkspaceName}
+                  onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateWorkspace()}
+                />
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => setShowNewWorkspace(false)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleCreateWorkspace} disabled={creating || !newWorkspaceName.trim()}>
+                    {creating ? 'Creating...' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── New Project Modal ──────────────────────────────────── */}
+      <AnimatePresence>
+        {showNewProject && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => setShowNewProject(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 360, maxWidth: '90vw' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700 }}>New Project</h3>
+                <button onClick={() => setShowNewProject(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={15} /></button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <input
+                  autoFocus className="input" placeholder="Project name"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
+                />
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 8 }}>Color</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {['#6366f1', '#f97316', '#22c55e', '#ec4899', '#06b6d4', '#f59e0b', '#ef4444', '#8b5cf6'].map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setNewProjectColor(c)}
+                        style={{ width: 24, height: 24, borderRadius: '50%', background: c, border: newProjectColor === c ? '2px solid white' : '2px solid transparent', cursor: 'pointer', transition: 'transform var(--transition)', boxShadow: newProjectColor === c ? `0 0 0 2px ${c}` : 'none' }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-secondary" onClick={() => setShowNewProject(false)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleCreateProject} disabled={creating || !newProjectName.trim()}>
+                    {creating ? 'Creating...' : 'Create'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style jsx>{`
         .sidebar-workspace {
@@ -250,6 +397,7 @@ export function Sidebar() {
           transition: all var(--transition);
         }
         .sidebar-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .sidebar-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
         .sidebar-user {
           display: flex;
           align-items: center;
