@@ -364,6 +364,14 @@ function AuthContent() {
               </motion.form>
             )}
           </AnimatePresence>
+
+          {/* ToS and Privacy */}
+          <div className="auth-footer-links">
+            By continuing, you agree to our{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          </div>
         </div>
       </div>
 
@@ -604,6 +612,26 @@ function AuthContent() {
           .auth-left { display: none; }
           .auth-right { width: 100%; padding: 28px 20px; }
           .auth-logo-mobile { display: flex; }
+        }
+
+        /* ── Footer Links ── */
+        .auth-footer-links {
+          text-align: center;
+          font-size: 11.5px;
+          color: var(--text-muted);
+          margin-top: 24px;
+          line-height: 1.6;
+        }
+
+        .auth-footer-links a {
+          color: var(--text-secondary);
+          text-decoration: underline;
+          text-underline-offset: 2px;
+          transition: color var(--transition);
+        }
+
+        .auth-footer-links a:hover {
+          color: var(--text-primary);
         }
       `}</style>
     </div>

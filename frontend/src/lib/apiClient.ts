@@ -138,7 +138,12 @@ export const projectsApi = {
     api.get(`${BASE}/projects/workspace/${workspaceId}`).then(unwrap<ApiProject[]>),
   get: (id: string) => api.get(`${BASE}/projects/${id}`).then(unwrap<ApiProject>),
   create: (data: { workspaceId: string; name: string; description?: string; color?: string }) =>
-    api.post(`${BASE}/projects`, data).then(unwrap<ApiProject>),
+    api.post(`${BASE}/projects`, {
+      workspace_id: data.workspaceId,
+      name: data.name,
+      description: data.description,
+      color: data.color
+    }).then(unwrap<ApiProject>),
   update: (id: string, data: Partial<ApiProject>) =>
     api.put(`${BASE}/projects/${id}`, data).then(unwrap<ApiProject>),
   delete: (id: string) => api.delete(`${BASE}/projects/${id}`),
@@ -158,13 +163,28 @@ export const tasksApi = {
     priority?: ApiTask['priority'];
     assigneeId?: string | null;
     dueDate?: string | null;
-  }) => api.post(`${BASE}/tasks`, data).then(unwrap<ApiTask>),
+  }) => api.post(`${BASE}/tasks`, {
+    project_id: data.projectId,
+    title: data.title,
+    description: data.description,
+    status: data.status,
+    priority: data.priority,
+    assignee_id: data.assigneeId,
+    due_date: data.dueDate
+  }).then(unwrap<ApiTask>),
   update: (
     id: string,
     data: Partial<Omit<ApiTask, 'id' | 'project_id' | 'created_by' | 'created_at' | 'updated_at'>> & {
       assigneeId?: string | null;
     }
-  ) => api.put(`${BASE}/tasks/${id}`, data).then(unwrap<ApiTask>),
+  ) => {
+    const payload = { ...data };
+    if ('assigneeId' in payload) {
+      payload.assignee_id = payload.assigneeId;
+      delete payload.assigneeId;
+    }
+    return api.put(`${BASE}/tasks/${id}`, payload).then(unwrap<ApiTask>);
+  },
   delete: (id: string) => api.delete(`${BASE}/tasks/${id}`),
   // Comments
   listComments: (id: string) =>
