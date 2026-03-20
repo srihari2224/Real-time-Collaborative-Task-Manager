@@ -2,6 +2,10 @@
 
 A full-stack, real-time collaborative task management application built with a modern, scalable architecture.
 
+## 🌐 Live Demo
+
+[![Live Demo](https://img.shields.io/badge/Live-Demo-green?style=for-the-badge)](https://taskify-ashen-chi.vercel.app/)
+
 ---
 
 ## 🚀 Local Development Setup
