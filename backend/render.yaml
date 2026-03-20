@@ -4,7 +4,7 @@ services:
     env: node
     region: singapore        # closest to ap-south-1; change to oregon/frankfurt as needed
     plan: free               # upgrade to starter for persistent disk
-    buildCommand: npm install
+    buildCommand: npm install --legacy-peer-deps && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
