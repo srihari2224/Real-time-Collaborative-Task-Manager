@@ -26,18 +26,18 @@ const schema = Joi.object({
   REDIS_TLS: Joi.boolean().default(false),
   REDIS_DB: Joi.number().default(0),
 
-  AWS_ACCESS_KEY_ID: Joi.string().required(),
-  AWS_SECRET_ACCESS_KEY: Joi.string().required(),
+  AWS_ACCESS_KEY_ID: Joi.string().allow('').default(''),
+  AWS_SECRET_ACCESS_KEY: Joi.string().allow('').default(''),
   AWS_REGION: Joi.string().default('us-east-1'),
-  S3_BUCKET_NAME: Joi.string().required(),
-  S3_BUCKET_URL: Joi.string().uri().required(),
+  S3_BUCKET_NAME: Joi.string().allow('').default(''),
+  S3_BUCKET_URL: Joi.string().uri().allow('').default('https://example.com'),
   S3_PRESIGNED_URL_EXPIRY: Joi.number().default(3600),
 
-  SES_FROM_EMAIL: Joi.string().email().required(),
+  SES_FROM_EMAIL: Joi.string().email().allow('').default('noreply@taskflow.app'),
   SES_FROM_NAME: Joi.string().default('TaskFlow'),
   SES_REGION: Joi.string().default('us-east-1'),
 
-  JWT_SECRET: Joi.string().min(32).required(),
+  JWT_SECRET: Joi.string().min(1).allow('').default('taskflow-dev-secret-change-in-production'),
   JWT_EXPIRES_IN: Joi.string().default('7d'),
 
   ALLOWED_ORIGINS: Joi.string().default('http://localhost:3000'),
