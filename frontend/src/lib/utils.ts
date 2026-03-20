@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatDate(dateStr?: string): string {
+export function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isToday(d)) return 'Today';
@@ -15,17 +15,17 @@ export function formatDate(dateStr?: string): string {
   return format(d, 'MMM d');
 }
 
-export function isOverdue(dateStr?: string): boolean {
+export function isOverdue(dateStr?: string | null): boolean {
   if (!dateStr) return false;
   return isPast(new Date(dateStr)) && !isToday(new Date(dateStr));
 }
 
-export function isDueToday(dateStr?: string): boolean {
+export function isDueToday(dateStr?: string | null): boolean {
   if (!dateStr) return false;
   return isToday(new Date(dateStr));
 }
 
-export function isDueThisWeek(dateStr?: string): boolean {
+export function isDueThisWeek(dateStr?: string | null): boolean {
   if (!dateStr) return false;
   return isThisWeek(new Date(dateStr), { weekStartsOn: 1 });
 }

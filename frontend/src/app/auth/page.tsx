@@ -1,5 +1,8 @@
 'use client';
 
+// Prevent static prerendering — Supabase accesses localStorage during SSR
+export const dynamic = 'force-dynamic';
+
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
