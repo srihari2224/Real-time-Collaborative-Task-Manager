@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { supabase } from './supabase';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -7,28 +8,22 @@ const api = axios.create({
   timeout: 10000,
 });
 
-// Attach JWT token from localStorage
-api.interceptors.request.use((config) => {
-  if (typeof window !== 'undefined') {
-    try {
-      const stored = JSON.parse(localStorage.getItem('taskflow-auth') || '{}');
-      if (stored?.state?.token) {
-        config.headers.Authorization = `Bearer ${stored.state.token}`;
-      }
-    } catch {
-      // ignore
-    }
+// Attach live Supabase JWT on every request
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
   }
   return config;
 });
 
-// Handle 401 globally
+// Handle 401 globally → redirect to auth
 api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('taskflow-auth');
+        supabase.auth.signOut();
         window.location.href = '/auth';
       }
     }
