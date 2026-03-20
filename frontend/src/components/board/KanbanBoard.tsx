@@ -21,9 +21,10 @@ import toast from 'react-hot-toast';
 interface KanbanBoardProps {
   sections: Section[];
   tasks: Task[];
+  onStatusChange?: (taskId: string, newStatus: string) => void;
 }
 
-export function KanbanBoard({ sections, tasks: initialTasks }: KanbanBoardProps) {
+export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: KanbanBoardProps) {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
 
@@ -87,12 +88,16 @@ export function KanbanBoard({ sections, tasks: initialTasks }: KanbanBoardProps)
       });
     }
 
-    // Emit: task:moved via socket (demo — just toast)
-    const fromSection = sections.find((s) => s.id === activeTask?.section_id);
-    if (fromSection) {
-      toast.success(`Moved to ${fromSection.name}`, { duration: 1500, id: 'task-moved' });
+    // Emit: task:moved via socket
+    const movedTask = tasks.find((t) => t.id === active.id);
+    const toSection = sections.find((s) => s.id === movedTask?.section_id);
+    if (toSection) {
+      toast.success(`Moved to ${toSection.name}`, { duration: 1500, id: 'task-moved' });
+      if (onStatusChange && movedTask) {
+        onStatusChange(movedTask.id, movedTask.section_id);
+      }
     }
-  }, [tasks, sections]);
+  }, [tasks, sections, onStatusChange]);
 
   const handleAddTask = (sectionId: string) => {
     toast('Click + Add task to create a new task', { icon: '📝' });

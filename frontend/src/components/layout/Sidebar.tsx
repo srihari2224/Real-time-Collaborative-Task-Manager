@@ -1,68 +1,72 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useParams } from 'next/navigation';
 import {
   Home, CheckSquare, Bell, Settings, LogOut, Plus,
-  Globe, Smartphone, Palette, ChevronDown, CheckSquare as TFLogo, X
+  ChevronDown, FolderKanban, Loader2
 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
-import { WORKSPACE, PROJECTS, NOTIFICATIONS } from '@/data/seed';
+import { workspacesApi, projectsApi, type ApiWorkspace, type ApiProject } from '@/lib/apiClient';
 import { getInitials } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const PROJECT_ICONS: Record<string, React.ReactNode> = {
-  globe: <Globe size={14} />,
-  smartphone: <Smartphone size={14} />,
-  palette: <Palette size={14} />,
-};
+import { supabase } from '@/lib/supabase';
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { sidebarOpen, setSidebarOpen } = useUIStore();
+  const params = useParams();
+  const { sidebarOpen } = useUIStore();
   const { user, logout } = useAuthStore();
-  const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
 
-  const unreadCount = NOTIFICATIONS.filter((n) => !n.is_read).length;
+  const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
+  const [projects, setProjects] = useState<ApiProject[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+
+  const workspaceId = params?.workspaceId as string | undefined;
+  const currentWorkspace = workspaces.find((w) => w.id === workspaceId) ?? workspaces[0];
+
+  // Load workspaces
+  useEffect(() => {
+    workspacesApi.list().then(setWorkspaces).catch(() => {});
+  }, []);
+
+  // Load projects when workspace changes
+  useEffect(() => {
+    if (!currentWorkspace?.id) return;
+    setLoadingProjects(true);
+    projectsApi
+      .listByWorkspace(currentWorkspace.id)
+      .then(setProjects)
+      .catch(() => setProjects([]))
+      .finally(() => setLoadingProjects(false));
+  }, [currentWorkspace?.id]);
 
   const navItems = [
-    { href: `/workspace/${WORKSPACE.id}`, icon: <Home size={15} />, label: 'Home' },
+    { href: currentWorkspace ? `/workspace/${currentWorkspace.id}` : '#', icon: <Home size={15} />, label: 'Home' },
     { href: '/my-tasks', icon: <CheckSquare size={15} />, label: 'My Tasks' },
-    { href: '/inbox', icon: <Bell size={15} />, label: 'Inbox', badge: unreadCount },
+    { href: '/inbox', icon: <Bell size={15} />, label: 'Inbox' },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     logout();
     router.push('/auth');
   };
 
+  const wsLetter = currentWorkspace?.name?.[0]?.toUpperCase() ?? 'W';
+
   return (
     <>
-      {/* Mobile overlay */}
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            className="sidebar-mobile-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSidebarOpen(false)}
-            style={{ display: 'none' }}
-          />
-        )}
-      </AnimatePresence>
-
       <nav className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         {/* Workspace Header */}
         <div className="sidebar-workspace" onClick={() => setWorkspaceSwitcherOpen(!workspaceSwitcherOpen)}>
-          <div className="workspace-logo">
-            A
-          </div>
+          <div className="workspace-logo">{wsLetter}</div>
           <div className="workspace-info">
-            <span className="workspace-name">{WORKSPACE.name}</span>
+            <span className="workspace-name">{currentWorkspace?.name ?? 'Loading...'}</span>
             <span className="workspace-plan">Free plan</span>
           </div>
           <ChevronDown size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 150ms', transform: workspaceSwitcherOpen ? 'rotate(180deg)' : 'none' }} />
@@ -79,10 +83,19 @@ export function Sidebar() {
             >
               <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-subtle)' }}>
                 <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, letterSpacing: '0.05em' }}>WORKSPACES</div>
-                <div className="sidebar-nav-item active" style={{ justifyContent: 'space-between' }}>
-                  <span>Acme Design Team</span>
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
-                </div>
+                {workspaces.map((ws) => (
+                  <div
+                    key={ws.id}
+                    className={`sidebar-nav-item ${ws.id === currentWorkspace?.id ? 'active' : ''}`}
+                    style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+                    onClick={() => { router.push(`/workspace/${ws.id}`); setWorkspaceSwitcherOpen(false); }}
+                  >
+                    <span>{ws.name}</span>
+                    {ws.id === currentWorkspace?.id && (
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)' }} />
+                    )}
+                  </div>
+                ))}
                 <button onClick={() => {}} className="sidebar-nav-item" style={{ width: '100%', border: 'none', cursor: 'pointer', marginTop: 4 }}>
                   <Plus size={13} /> Create Workspace
                 </button>
@@ -99,11 +112,6 @@ export function Sidebar() {
               <Link key={item.href} href={item.href} className={`sidebar-nav-item ${isActive ? 'active' : ''}`}>
                 {item.icon}
                 <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge ? (
-                  <span className="notification-badge" style={{ animation: 'none', minWidth: 17, height: 17, fontSize: 10 }}>
-                    {item.badge}
-                  </span>
-                ) : null}
               </Link>
             );
           })}
@@ -118,21 +126,29 @@ export function Sidebar() {
             </button>
           </div>
           <div className="scroll-y" style={{ flex: 1 }}>
-            {PROJECTS.map((project) => {
-              const isActive = pathname.includes(project.id);
-              return (
-                <Link
-                  key={project.id}
-                  href={`/workspace/${WORKSPACE.id}/project/${project.id}`}
-                  className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-                >
-                  <span style={{ color: project.color, flexShrink: 0 }}>
-                    {PROJECT_ICONS[project.icon || 'globe']}
-                  </span>
-                  <span className="truncate-1" style={{ flex: 1 }}>{project.name}</span>
-                </Link>
-              );
-            })}
+            {loadingProjects ? (
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12 }}>
+                <Loader2 size={12} className="spin" /> Loading...
+              </div>
+            ) : projects.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>No projects yet</div>
+            ) : (
+              projects.map((project) => {
+                const isActive = pathname.includes(project.id);
+                return (
+                  <Link
+                    key={project.id}
+                    href={`/workspace/${currentWorkspace?.id}/project/${project.id}`}
+                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                  >
+                    <span style={{ color: project.color ?? 'var(--accent)', flexShrink: 0 }}>
+                      <FolderKanban size={14} />
+                    </span>
+                    <span className="truncate-1" style={{ flex: 1 }}>{project.name}</span>
+                  </Link>
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -147,11 +163,11 @@ export function Sidebar() {
         {/* User Footer */}
         <div className="sidebar-user">
           <div className="avatar" style={{ width: 32, height: 32, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, flexShrink: 0 }}>
-            {user ? getInitials(user.name) : 'U'}
+            {user ? getInitials((user as any).full_name || (user as any).name || user.email) : 'U'}
           </div>
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.name || 'User'}
+              {(user as any)?.full_name || (user as any)?.name || 'User'}
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user?.email || ''}
@@ -174,9 +190,7 @@ export function Sidebar() {
           transition: background var(--transition);
           flex-shrink: 0;
         }
-        .sidebar-workspace:hover {
-          background: var(--bg-hover);
-        }
+        .sidebar-workspace:hover { background: var(--bg-hover); }
         .workspace-logo {
           width: 28px;
           height: 28px;
@@ -190,10 +204,7 @@ export function Sidebar() {
           color: white;
           flex-shrink: 0;
         }
-        .workspace-info {
-          flex: 1;
-          overflow: hidden;
-        }
+        .workspace-info { flex: 1; overflow: hidden; }
         .workspace-name {
           display: block;
           font-size: 13px;
@@ -238,10 +249,7 @@ export function Sidebar() {
           cursor: pointer;
           transition: all var(--transition);
         }
-        .sidebar-icon-btn:hover {
-          background: var(--bg-hover);
-          color: var(--text-primary);
-        }
+        .sidebar-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
         .sidebar-user {
           display: flex;
           align-items: center;
@@ -251,6 +259,8 @@ export function Sidebar() {
           flex-shrink: 0;
           border-top: 1px solid var(--border-subtle);
         }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       `}</style>
     </>
   );

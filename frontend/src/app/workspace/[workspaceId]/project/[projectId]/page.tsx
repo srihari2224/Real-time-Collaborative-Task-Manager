@@ -1,22 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
-import { Avatar, PresenceAvatars } from '@/components/ui/Avatar';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { PROJECTS, SECTIONS, TASKS, USERS } from '@/data/seed';
 import { ViewType } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
+import { projectsApi, tasksApi, type ApiProject, type ApiTask } from '@/lib/apiClient';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
   LayoutGrid, List, Calendar, BarChart2, Filter,
-  Share2, ChevronDown, ChevronRight
+  Share2, ChevronDown, ChevronRight, Plus, Loader2, X
 } from 'lucide-react';
 import { formatDate, isOverdue, PRIORITY_CONFIG } from '@/lib/utils';
 import { Priority } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
+
+// Map backend status → Kanban section label
+const STATUS_LABELS: Record<ApiTask['status'], string> = {
+  todo: 'To Do',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  done: 'Done',
+  cancelled: 'Cancelled',
+};
+
+const STATUS_ORDER: ApiTask['status'][] = ['todo', 'in_progress', 'in_review', 'done'];
 
 const VIEW_TABS: { key: ViewType; label: string; icon: React.ReactNode }[] = [
   { key: 'kanban', label: 'Board', icon: <LayoutGrid size={13} /> },
@@ -29,29 +40,87 @@ export default function ProjectPage() {
   const params = useParams();
   const { activeView, setActiveView, openTaskPanel } = useUIStore();
   const projectId = params?.projectId as string;
+  const workspaceId = params?.workspaceId as string;
 
-  const project = PROJECTS.find((p) => p.id === projectId) || PROJECTS[0];
-  const projectSections = SECTIONS.filter((s) => s.project_id === project.id);
-  const projectTasks = TASKS.filter((t) => t.project_id === project.id);
+  const [project, setProject] = useState<ApiProject | null>(null);
+  const [tasks, setTasks] = useState<ApiTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showNewTask, setShowNewTask] = useState(false);
 
-  const completedTasks = projectTasks.filter((t) => t.subtasks.length > 0 && t.subtasks.every((s) => s.is_completed)).length;
-  const progressPct = projectTasks.length > 0 ? (completedTasks / projectTasks.length) * 100 : 0;
+  const loadData = useCallback(async () => {
+    if (!projectId) return;
+    setLoading(true);
+    try {
+      const [proj, taskList] = await Promise.all([
+        projectsApi.get(projectId),
+        tasksApi.listByProject(projectId),
+      ]);
+      setProject(proj);
+      setTasks(taskList);
+    } catch {
+      toast.error('Failed to load project');
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const completedTasks = tasks.filter((t) => t.status === 'done').length;
+  const progressPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
+
+  // Build Kanban-compatible sections from task statuses
+  const kanbanSections = STATUS_ORDER.map((status) => ({
+    id: status,
+    project_id: projectId,
+    name: STATUS_LABELS[status],
+    position: STATUS_ORDER.indexOf(status),
+  }));
+
+  // Map API tasks to the shape KanbanBoard expects (using status as section_id)
+  const kanbanTasks = tasks.map((t) => ({
+    ...t,
+    section_id: t.status,
+    assignees: t.assignee ? [{ id: t.assignee_id!, name: (t.assignee as any)?.full_name || 'User', email: (t.assignee as any)?.email || '', avatar_url: (t.assignee as any)?.avatar_url || null, created_at: '' }] : [],
+    watchers: [], labels: [], subtasks: [], attachments: [], unread_chat_count: 0,
+    created_by: t.created_by,
+  }));
+
+  const handleStatusUpdate = async (taskId: string, newStatus: string) => {
+    try {
+      await tasksApi.update(taskId, { status: newStatus as ApiTask['status'] });
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus as ApiTask['status'] } : t));
+    } catch {
+      toast.error('Failed to update task status');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <TopBar title="Loading..." />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--text-muted)' }}>
+          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Loading project...
+        </div>
+        <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <TopBar
-        title={project.name}
+        title={project?.name ?? 'Project'}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <PresenceAvatars users={USERS.slice(0, 3)} size={26} showPresence />
             <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
               <Filter size={12} /> Filter
             </button>
             <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
               <Share2 size={12} /> Share
             </button>
-            <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 10px' }}>
-              + New Task
+            <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => setShowNewTask(true)}>
+              <Plus size={12} /> New Task
             </button>
           </div>
         }
@@ -71,39 +140,143 @@ export default function ProjectPage() {
             </button>
           ))}
         </div>
-
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200 }}>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>
-            {completedTasks}/{projectTasks.length} done
-          </span>
-          <div style={{ flex: 1 }}>
-            <ProgressBar value={progressPct} />
-          </div>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>
-            {Math.round(progressPct)}%
-          </span>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>{completedTasks}/{tasks.length} done</span>
+          <div style={{ flex: 1 }}><ProgressBar value={progressPct} /></div>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>{Math.round(progressPct)}%</span>
         </div>
       </div>
 
       {/* Main Content */}
       <div style={{ flex: 1, overflow: 'hidden', padding: activeView === 'kanban' ? '16px 20px' : '0' }}>
         {activeView === 'kanban' && (
-          <KanbanBoard sections={projectSections} tasks={projectTasks} />
+          <KanbanBoard
+            sections={kanbanSections}
+            tasks={kanbanTasks as any}
+            onStatusChange={handleStatusUpdate}
+          />
         )}
-
         {activeView === 'list' && (
-          <ListView sections={projectSections} tasks={projectTasks} onTaskClick={openTaskPanel} />
+          <ListView sections={kanbanSections} tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
         )}
-
         {activeView === 'calendar' && (
-          <CalendarView tasks={projectTasks} onTaskClick={openTaskPanel} />
+          <CalendarView tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
         )}
-
         {activeView === 'overview' && (
-          <OverviewView tasks={projectTasks} />
+          <OverviewView tasks={tasks} />
         )}
       </div>
+
+      {/* New Task Modal */}
+      <AnimatePresence>
+        {showNewTask && (
+          <NewTaskModal
+            projectId={projectId}
+            onClose={() => setShowNewTask(false)}
+            onCreated={(task) => { setTasks((prev) => [...prev, task]); setShowNewTask(false); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
+  );
+}
+
+// ─── New Task Modal ───────────────────────────────────────────────────────────
+
+function NewTaskModal({ projectId, onClose, onCreated }: {
+  projectId: string;
+  onClose: () => void;
+  onCreated: (task: ApiTask) => void;
+}) {
+  const [title, setTitle] = useState('');
+  const [priority, setPriority] = useState<ApiTask['priority']>('medium');
+  const [status, setStatus] = useState<ApiTask['status']>('todo');
+  const [dueDate, setDueDate] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      const task = await tasksApi.create({
+        projectId,
+        title: title.trim(),
+        priority,
+        status,
+        dueDate: dueDate || undefined,
+      });
+      toast.success('Task created!');
+      onCreated(task);
+    } catch {
+      toast.error('Failed to create task');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 400, maxWidth: '90vw' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700 }}>New Task</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={16} /></button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <input
+            autoFocus
+            className="input"
+            placeholder="Task title..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Priority</label>
+              <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Status</label>
+              <select className="input" value={status} onChange={(e) => setStatus(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
+                <option value="todo">To Do</option>
+                <option value="in_progress">In Progress</option>
+                <option value="in_review">In Review</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Due Date</label>
+            <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ padding: '7px 10px', fontSize: 13 }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={saving || !title.trim()}>
+              {saving ? 'Creating...' : 'Create Task'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -111,13 +284,11 @@ export default function ProjectPage() {
 
 function ListView({ sections, tasks, onTaskClick }: any) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-
   return (
     <div className="scroll-y" style={{ height: '100%', padding: '16px 20px' }}>
       {sections.map((sec: any) => {
         const secTasks = tasks.filter((t: any) => t.section_id === sec.id);
         const isCollapsed = collapsed[sec.id];
-
         return (
           <div key={sec.id} style={{ marginBottom: 20 }}>
             <button
@@ -128,7 +299,6 @@ function ListView({ sections, tasks, onTaskClick }: any) {
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{sec.name}</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', borderRadius: 99, padding: '1px 7px', border: '1px solid var(--border-subtle)' }}>{secTasks.length}</span>
             </button>
-
             <AnimatePresence>
               {!isCollapsed && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
@@ -139,16 +309,7 @@ function ListView({ sections, tasks, onTaskClick }: any) {
                       <div
                         key={task.id}
                         onClick={() => onTaskClick(task.id)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '10px 16px',
-                          cursor: 'pointer',
-                          borderBottom: i < secTasks.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                          transition: 'background var(--transition)',
-                          borderLeft: `3px solid ${PRIORITY_CONFIG[task.priority as Priority].color}`,
-                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer', borderBottom: i < secTasks.length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background var(--transition)', borderLeft: `3px solid ${PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280'}` }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
@@ -156,14 +317,8 @@ function ListView({ sections, tasks, onTaskClick }: any) {
                         <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{task.title}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           {task.due_date && (
-                            <span style={{ fontSize: 11.5, color: isOverdue(task.due_date) ? '#ef4444' : 'var(--text-muted)', fontWeight: 500 }}>
+                            <span style={{ fontSize: 11.5, color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : 'var(--text-muted)', fontWeight: 500 }}>
                               {formatDate(task.due_date)}
-                            </span>
-                          )}
-                          <PresenceAvatars users={task.assignees} size={20} />
-                          {task.unread_chat_count > 0 && (
-                            <span style={{ background: 'var(--accent)', color: 'white', borderRadius: 99, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>
-                              {task.unread_chat_count}
                             </span>
                           )}
                         </div>
@@ -217,7 +372,7 @@ function CalendarView({ tasks, onTaskClick }: any) {
           const dayTasks = tasksByDay[day] || [];
           const isToday = day === today.getDate();
           return (
-            <div key={day} style={{ minHeight: 80, padding: '6px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', position: 'relative' }}>
+            <div key={day} style={{ minHeight: 80, padding: '6px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
               <span style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isToday ? 'white' : 'var(--text-secondary)', background: isToday ? 'var(--accent)' : 'transparent', borderRadius: '50%', width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                 {day}
               </span>
@@ -225,7 +380,7 @@ function CalendarView({ tasks, onTaskClick }: any) {
                 <div
                   key={task.id}
                   onClick={() => onTaskClick(task.id)}
-                  style={{ marginTop: 3, padding: '1px 5px', borderRadius: 3, background: PRIORITY_CONFIG[task.priority as Priority].color + '20', borderLeft: `2px solid ${PRIORITY_CONFIG[task.priority as Priority].color}`, fontSize: 10.5, color: 'var(--text-primary)', cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontWeight: 500 }}
+                  style={{ marginTop: 3, padding: '1px 5px', borderRadius: 3, background: (PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280') + '20', borderLeft: `2px solid ${PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280'}`, fontSize: 10.5, color: 'var(--text-primary)', cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontWeight: 500 }}
                 >
                   {task.title}
                 </div>
@@ -243,12 +398,12 @@ function CalendarView({ tasks, onTaskClick }: any) {
 
 const PIE_COLORS = ['#22c55e', '#6366f1', '#f59e0b', '#ef4444'];
 
-function OverviewView({ tasks }: { tasks: any[] }) {
+function OverviewView({ tasks }: { tasks: ApiTask[] }) {
   const byStatus = [
-    { name: 'Done', count: tasks.filter((t) => t.subtasks.every((s: any) => s.is_completed) && t.subtasks.length > 0).length },
-    { name: 'In Progress', count: tasks.filter((t) => t.subtasks.some((s: any) => s.is_completed) && !t.subtasks.every((s: any) => s.is_completed)).length },
-    { name: 'Pending', count: tasks.filter((t) => t.subtasks.every((s: any) => !s.is_completed)).length },
-    { name: 'Overdue', count: tasks.filter((t) => isOverdue(t.due_date)).length },
+    { name: 'Done', count: tasks.filter((t) => t.status === 'done').length },
+    { name: 'In Progress', count: tasks.filter((t) => t.status === 'in_progress').length },
+    { name: 'To Do', count: tasks.filter((t) => t.status === 'todo').length },
+    { name: 'Overdue', count: tasks.filter((t) => isOverdue(t.due_date ?? undefined)).length },
   ];
 
   const byPriority = [
@@ -261,7 +416,6 @@ function OverviewView({ tasks }: { tasks: any[] }) {
   return (
     <div className="scroll-y" style={{ height: '100%', padding: '20px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        {/* Status Pie */}
         <div className="card" style={{ padding: '18px' }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Status Breakdown</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
@@ -283,8 +437,6 @@ function OverviewView({ tasks }: { tasks: any[] }) {
             </div>
           </div>
         </div>
-
-        {/* Priority Bar */}
         <div className="card" style={{ padding: '18px' }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Priority Distribution</h3>
           <ResponsiveContainer width="100%" height={120}>
@@ -299,27 +451,15 @@ function OverviewView({ tasks }: { tasks: any[] }) {
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* Top Assignees */}
       <div className="card" style={{ padding: '18px' }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Top Assignees</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {USERS.slice(0, 4).map((user) => {
-            const userTasks = tasks.filter((t) => t.assignees.some((a: any) => a.id === user.id));
-            const pct = tasks.length > 0 ? (userTasks.length / tasks.length) * 100 : 0;
-            return (
-              <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar user={user} size={28} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 500 }}>{user.name}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{userTasks.length} tasks</span>
-                  </div>
-                  <ProgressBar value={pct} />
-                </div>
-              </div>
-            );
-          })}
+        <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Task Summary</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {byStatus.map((s, i) => (
+            <div key={s.name} style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius)' }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: PIE_COLORS[i], letterSpacing: '-0.03em' }}>{s.count}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{s.name}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
