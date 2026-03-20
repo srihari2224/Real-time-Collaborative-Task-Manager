@@ -13,7 +13,7 @@ const schema = Joi.object({
   // Supabase
   SUPABASE_URL: Joi.string().uri().required(),
   SUPABASE_ANON_KEY: Joi.string().required(),
-  SUPABASE_SERVICE_ROLE_KEY: Joi.string().required(),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().allow('').default(''),
 
   // Database
   DATABASE_URL: Joi.string().required(),

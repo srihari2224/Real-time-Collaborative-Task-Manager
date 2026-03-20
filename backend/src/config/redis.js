@@ -11,13 +11,15 @@ const commonOptions = {
   db: env.redis.db,
   password: env.redis.password || undefined,
   retryStrategy(times) {
-    const delay = Math.min(times * 50, 2000);
+    if (times > 5) return null; // Stop retrying after 5 attempts — prevents infinite reconnect loops
+    const delay = Math.min(times * 200, 2000);
     logger.warn({ attempt: times, delay }, 'Redis reconnecting...');
     return delay;
   },
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: true,
-  lazyConnect: false,
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+  lazyConnect: true,          // Don't auto-connect on instantiation
+  enableOfflineQueue: false,  // Fail requests immediately when offline
 };
 
 if (env.redis.tls) {
@@ -43,10 +45,11 @@ redisPub.on('connect', () => logger.debug('Redis publisher connected'));
 // Connect and test
 export const connectRedis = async () => {
   try {
+    await redisClient.connect();
     await redisClient.ping();
     logger.info('✅ Redis connection verified (PING→PONG)');
   } catch (err) {
-    logger.error({ err }, '❌ Redis connection failed');
+    logger.warn({ err }, '⚠️  Redis connection failed — running without cache');
     throw err;
   }
 };
