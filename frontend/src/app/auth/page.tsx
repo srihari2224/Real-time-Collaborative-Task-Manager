@@ -9,8 +9,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CheckSquare } from 'lucide-react';
-import { Eye, EyeOff, ArrowRight, Mail, Lock, User } from 'lucide-react';
+import { CheckSquare, Eye, EyeOff, ArrowRight, Mail, Lock } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -21,20 +20,13 @@ const loginSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-const signupSchema = loginSchema.extend({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
-});
-
-const forgotSchema = z.object({
-  email: z.string().email('Enter a valid email'),
-});
+const signupSchema = loginSchema;
 
 type LoginForm = z.infer<typeof loginSchema>;
 type SignupForm = z.infer<typeof signupSchema>;
-type ForgotForm = z.infer<typeof forgotSchema>;
-type Tab = 'login' | 'signup' | 'forgot';
+type Mode = 'login' | 'signup';
 
-// Sync Supabase session to our backend, store user in authStore
+// Sync Supabase session to our backend
 async function syncSessionToBackend(
   accessToken: string,
   setUser: (u: any) => void,
@@ -46,15 +38,14 @@ async function syncSessionToBackend(
   setSession(session);
   try {
     const res = await api.post('/api/v1/auth/sync', {});
-    setUser(res.data.data);
+    setUser(res.data?.data ?? res.data);
   } catch {
     // Backend sync failed but session is valid — still allow access
   }
 }
 
-// Inner component that uses useSearchParams (must be inside Suspense)
 function AuthContent() {
-  const [tab, setTab] = useState<Tab>('login');
+  const [mode, setMode] = useState<Mode>('login');
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -62,7 +53,6 @@ function AuthContent() {
 
   const loginForm = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
   const signupForm = useForm<SignupForm>({ resolver: zodResolver(signupSchema) });
-  const forgotForm = useForm<ForgotForm>({ resolver: zodResolver(forgotSchema) });
 
   // Show OAuth error if redirected back with ?error=
   useEffect(() => {
@@ -103,7 +93,6 @@ function AuthContent() {
       email: data.email,
       password: data.password,
       options: {
-        data: { full_name: data.name },
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
@@ -111,10 +100,9 @@ function AuthContent() {
       toast.error(error.message);
       return;
     }
-    // If email confirmation required, session will be null
     if (!authData.session) {
       toast.success('Account created! Check your email to confirm your account.');
-      setTab('login');
+      setMode('login');
       return;
     }
     await syncSessionToBackend(
@@ -124,18 +112,6 @@ function AuthContent() {
     );
     toast.success('Welcome to TaskFlow!');
     router.replace('/');
-  };
-
-  const handleForgot = async (data: ForgotForm) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth`,
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    toast.success('Password reset link sent to ' + data.email);
-    setTab('login');
   };
 
   const handleGoogleSSO = async () => {
@@ -149,13 +125,16 @@ function AuthContent() {
     if (error) {
       toast.error(error.message);
     }
-    // Browser will redirect to Google — no further action needed here
   };
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'login', label: 'Sign In' },
-    { key: 'signup', label: 'Create Account' },
-  ];
+  const switchMode = (newMode: Mode) => {
+    setMode(newMode);
+    setShowPassword(false);
+    loginForm.reset();
+    signupForm.reset();
+  };
+
+  const isLogin = mode === 'login';
 
   return (
     <div className="auth-page">
@@ -183,8 +162,6 @@ function AuthContent() {
               </div>
             ))}
           </div>
-
-          {/* Decorative Cards Preview */}
           <div className="auth-preview">
             {[
               { title: 'Homepage Redesign', priority: 'urgent', assignees: ['S', 'T'], badge: '3' },
@@ -224,144 +201,166 @@ function AuthContent() {
       {/* Right Panel — Form */}
       <div className="auth-right">
         <div className="auth-form-container">
-          <div className="auth-form-header">
-            <div className="auth-logo-mobile">
-              <CheckSquare size={22} style={{ color: 'var(--accent)' }} />
-              <span>TaskFlow</span>
-            </div>
-            {tab !== 'forgot' && (
-              <div className="auth-tabs">
-                {tabs.map((t) => (
-                  <button
-                    key={t.key}
-                    className={`auth-tab ${tab === t.key ? 'active' : ''}`}
-                    onClick={() => setTab(t.key)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {tab === 'forgot' && (
-              <div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Forgot Password?</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>We&apos;ll send you a reset link.</p>
-              </div>
-            )}
+          {/* Mobile Logo */}
+          <div className="auth-logo-mobile">
+            <CheckSquare size={22} style={{ color: 'var(--accent)' }} />
+            <span>TaskFlow</span>
           </div>
 
+          {/* Header */}
           <AnimatePresence mode="wait">
-            {tab === 'login' && (
+            <motion.div
+              key={mode + '-header'}
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.18 }}
+              className="auth-header-text"
+            >
+              <h2>{isLogin ? 'Sign in to TaskFlow' : 'Create your account'}</h2>
+              <p>{isLogin ? 'Welcome back! Enter your credentials to continue.' : 'Use your Google account email and password.'}</p>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Form */}
+          <AnimatePresence mode="wait">
+            {isLogin ? (
               <motion.form
                 key="login"
-                initial={{ opacity: 0, x: 10 }}
+                initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+                exit={{ opacity: 0, x: -16 }}
                 transition={{ duration: 0.2 }}
                 onSubmit={loginForm.handleSubmit(handleLogin)}
                 className="auth-form"
               >
                 <div className="form-field">
-                  <label className="form-label">Email</label>
+                  <label className="form-label">Email address</label>
                   <div className="input-icon-wrap">
                     <Mail size={14} className="input-icon" />
-                    <input className="input input-with-icon" type="email" placeholder="you@company.com" {...loginForm.register('email')} />
+                    <input
+                      className="input input-with-icon"
+                      type="email"
+                      placeholder="you@gmail.com"
+                      autoComplete="email"
+                      {...loginForm.register('email')}
+                    />
                   </div>
                   {loginForm.formState.errors.email && <span className="form-error">{loginForm.formState.errors.email.message}</span>}
                 </div>
+
                 <div className="form-field">
                   <label className="form-label">Password</label>
                   <div className="input-icon-wrap">
                     <Lock size={14} className="input-icon" />
-                    <input className="input input-with-icon" type={showPassword ? 'text' : 'password'} placeholder="••••••••" {...loginForm.register('password')} style={{ paddingRight: 40 }} />
+                    <input
+                      className="input input-with-icon"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      {...loginForm.register('password')}
+                      style={{ paddingRight: 40 }}
+                    />
                     <button type="button" className="input-icon-right" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
                   {loginForm.formState.errors.password && <span className="form-error">{loginForm.formState.errors.password.message}</span>}
                 </div>
-                <button type="button" className="forgot-link" onClick={() => setTab('forgot')}>Forgot password?</button>
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '10px 14px' }} disabled={loginForm.formState.isSubmitting}>
-                  {loginForm.formState.isSubmitting ? 'Signing in...' : <><span>Sign In</span> <ArrowRight size={14} /></>}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary auth-submit-btn"
+                  disabled={loginForm.formState.isSubmitting}
+                >
+                  {loginForm.formState.isSubmitting
+                    ? <><span className="spinner" />Signing in...</>
+                    : <><span>Sign In</span><ArrowRight size={14} /></>}
                 </button>
 
-                <div className="auth-divider"><span>or</span></div>
+                {/* Toggle to sign up */}
+                <p className="auth-switch-text">
+                  Don&apos;t have an account?{' '}
+                  <button type="button" className="auth-switch-link" onClick={() => switchMode('signup')}>
+                    Sign up
+                  </button>
+                </p>
 
+                {/* Divider */}
+                <div className="auth-divider"><span>or continue with</span></div>
+
+                {/* Google */}
                 <GoogleBtn onClick={handleGoogleSSO} />
+                <p className="auth-google-note">This uses Google OAuth 2.0 authentication.</p>
               </motion.form>
-            )}
-
-            {tab === 'signup' && (
+            ) : (
               <motion.form
                 key="signup"
-                initial={{ opacity: 0, x: 10 }}
+                initial={{ opacity: 0, x: 16 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
+                exit={{ opacity: 0, x: -16 }}
                 transition={{ duration: 0.2 }}
                 onSubmit={signupForm.handleSubmit(handleSignup)}
                 className="auth-form"
               >
                 <div className="form-field">
-                  <label className="form-label">Full Name</label>
-                  <div className="input-icon-wrap">
-                    <User size={14} className="input-icon" />
-                    <input className="input input-with-icon" type="text" placeholder="Sarah Chen" {...signupForm.register('name')} />
-                  </div>
-                  {signupForm.formState.errors.name && <span className="form-error">{signupForm.formState.errors.name.message}</span>}
-                </div>
-                <div className="form-field">
-                  <label className="form-label">Email</label>
+                  <label className="form-label">Email address</label>
                   <div className="input-icon-wrap">
                     <Mail size={14} className="input-icon" />
-                    <input className="input input-with-icon" type="email" placeholder="you@company.com" {...signupForm.register('email')} />
+                    <input
+                      className="input input-with-icon"
+                      type="email"
+                      placeholder="you@gmail.com"
+                      autoComplete="email"
+                      {...signupForm.register('email')}
+                    />
                   </div>
                   {signupForm.formState.errors.email && <span className="form-error">{signupForm.formState.errors.email.message}</span>}
                 </div>
+
                 <div className="form-field">
                   <label className="form-label">Password</label>
                   <div className="input-icon-wrap">
                     <Lock size={14} className="input-icon" />
-                    <input className="input input-with-icon" type={showPassword ? 'text' : 'password'} placeholder="Min. 6 characters" {...signupForm.register('password')} style={{ paddingRight: 40 }} />
+                    <input
+                      className="input input-with-icon"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Min. 6 characters"
+                      autoComplete="new-password"
+                      {...signupForm.register('password')}
+                      style={{ paddingRight: 40 }}
+                    />
                     <button type="button" className="input-icon-right" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>
                   </div>
                   {signupForm.formState.errors.password && <span className="form-error">{signupForm.formState.errors.password.message}</span>}
                 </div>
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '10px 14px' }} disabled={signupForm.formState.isSubmitting}>
-                  {signupForm.formState.isSubmitting ? 'Creating account...' : <><span>Create Account</span> <ArrowRight size={14} /></>}
+
+                <button
+                  type="submit"
+                  className="btn btn-primary auth-submit-btn"
+                  disabled={signupForm.formState.isSubmitting}
+                >
+                  {signupForm.formState.isSubmitting
+                    ? <><span className="spinner" />Creating account...</>
+                    : <><span>Create Account</span><ArrowRight size={14} /></>}
                 </button>
 
-                <div className="auth-divider"><span>or</span></div>
+                {/* Toggle to sign in */}
+                <p className="auth-switch-text">
+                  Already have an account?{' '}
+                  <button type="button" className="auth-switch-link" onClick={() => switchMode('login')}>
+                    Sign in
+                  </button>
+                </p>
 
+                {/* Divider */}
+                <div className="auth-divider"><span>or continue with</span></div>
+
+                {/* Google */}
                 <GoogleBtn onClick={handleGoogleSSO} />
-              </motion.form>
-            )}
-
-            {tab === 'forgot' && (
-              <motion.form
-                key="forgot"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.2 }}
-                onSubmit={forgotForm.handleSubmit(handleForgot)}
-                className="auth-form"
-              >
-                <div className="form-field">
-                  <label className="form-label">Email Address</label>
-                  <div className="input-icon-wrap">
-                    <Mail size={14} className="input-icon" />
-                    <input className="input input-with-icon" type="email" placeholder="you@company.com" {...forgotForm.register('email')} />
-                  </div>
-                  {forgotForm.formState.errors.email && <span className="form-error">{forgotForm.formState.errors.email.message}</span>}
-                </div>
-                <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '10px 14px' }} disabled={forgotForm.formState.isSubmitting}>
-                  {forgotForm.formState.isSubmitting ? 'Sending...' : 'Send Reset Link'}
-                </button>
-                <button type="button" className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setTab('login')}>
-                  Back to Sign In
-                </button>
+                <p className="auth-google-note">This uses Google OAuth 2.0 authentication.</p>
               </motion.form>
             )}
           </AnimatePresence>
@@ -377,6 +376,7 @@ function AuthContent() {
           overflow: hidden;
         }
 
+        /* ── Left Branding Panel ── */
         .auth-left {
           flex: 1;
           background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-elevated) 100%);
@@ -392,302 +392,217 @@ function AuthContent() {
         .auth-left::before {
           content: '';
           position: absolute;
-          top: -200px;
-          right: -200px;
-          width: 500px;
-          height: 500px;
+          top: -200px; right: -200px;
+          width: 500px; height: 500px;
           border-radius: 50%;
-          background: radial-gradient(circle, rgba(255, 107, 71, 0.08) 0%, transparent 70%);
+          background: radial-gradient(circle, rgba(255,107,71,0.08) 0%, transparent 70%);
           pointer-events: none;
         }
 
-        .auth-left-content {
-          max-width: 440px;
-          width: 100%;
-        }
+        .auth-left-content { max-width: 440px; width: 100%; }
 
         .auth-logo {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 20px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--text-primary);
+          display: flex; align-items: center; gap: 10px;
+          font-size: 20px; font-weight: 800;
+          letter-spacing: -0.03em; color: var(--text-primary);
           margin-bottom: 48px;
         }
 
         .auth-hero-text h1 {
           font-size: clamp(2rem, 3.5vw, 2.8rem);
-          font-weight: 800;
-          line-height: 1.15;
-          letter-spacing: -0.03em;
-          margin-bottom: 14px;
+          font-weight: 800; line-height: 1.15;
+          letter-spacing: -0.03em; margin-bottom: 14px;
           color: var(--text-primary);
         }
 
-        .accent-text {
-          color: var(--accent);
-        }
+        .accent-text { color: var(--accent); }
 
         .auth-hero-text p {
-          font-size: 15px;
-          color: var(--text-secondary);
-          line-height: 1.6;
-          margin-bottom: 32px;
+          font-size: 15px; color: var(--text-secondary);
+          line-height: 1.6; margin-bottom: 32px;
         }
 
         .auth-feature-list {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          margin-bottom: 40px;
+          display: flex; flex-direction: column;
+          gap: 10px; margin-bottom: 40px;
         }
 
         .auth-feature-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13.5px;
-          color: var(--text-secondary);
+          display: flex; align-items: center;
+          gap: 10px; font-size: 13.5px; color: var(--text-secondary);
         }
 
         .auth-feature-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: var(--accent);
-          flex-shrink: 0;
+          width: 5px; height: 5px; border-radius: 50%;
+          background: var(--accent); flex-shrink: 0;
         }
 
-        .auth-preview {
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-          position: relative;
-        }
+        .auth-preview { display: flex; flex-direction: column; gap: 0; position: relative; }
 
         .auth-preview-card {
           background: var(--bg-overlay);
           border: 1px solid var(--border-default);
           border-radius: var(--radius);
           padding: 10px 14px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
+          display: flex; align-items: center; gap: 10px;
           margin-bottom: 6px;
           backdrop-filter: blur(10px);
         }
 
-        .auth-preview-priority {
-          width: 3px;
-          height: 28px;
-          border-radius: 2px;
-          flex-shrink: 0;
-        }
-
+        .auth-preview-priority { width: 3px; height: 28px; border-radius: 2px; flex-shrink: 0; }
         .priority-urgent { background: #ef4444; }
         .priority-high   { background: #f97316; }
         .priority-medium { background: #3b82f6; }
 
-        .auth-preview-title {
-          font-size: 12.5px;
-          font-weight: 500;
-          color: var(--text-primary);
-          flex: 1;
-        }
+        .auth-preview-title { font-size: 12.5px; font-weight: 500; color: var(--text-primary); flex: 1; }
+        .auth-preview-meta  { display: flex; align-items: center; gap: 6px; }
 
-        .auth-preview-meta {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-
+        /* ── Right Form Panel ── */
         .auth-right {
-          width: 440px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 40px 32px;
+          width: 460px;
+          display: flex; align-items: center; justify-content: center;
+          padding: 40px 36px;
           background: var(--bg-base);
           overflow-y: auto;
         }
 
-        .auth-form-container {
-          width: 100%;
-          max-width: 360px;
-        }
+        .auth-form-container { width: 100%; max-width: 380px; }
 
-        .auth-form-header {
+        .auth-logo-mobile {
+          display: none; align-items: center; gap: 8px;
+          font-size: 17px; font-weight: 800;
+          letter-spacing: -0.03em; color: var(--text-primary);
           margin-bottom: 28px;
         }
 
-        .auth-logo-mobile {
-          display: none;
-          align-items: center;
-          gap: 8px;
-          font-size: 17px;
-          font-weight: 800;
-          letter-spacing: -0.03em;
-          color: var(--text-primary);
-          margin-bottom: 20px;
+        .auth-header-text { margin-bottom: 28px; }
+
+        .auth-header-text h2 {
+          font-size: 22px; font-weight: 700;
+          letter-spacing: -0.02em; color: var(--text-primary);
+          margin-bottom: 6px;
         }
 
-        .auth-tabs {
-          display: flex;
-          gap: 0;
-          background: var(--bg-elevated);
-          border-radius: var(--radius);
-          padding: 3px;
-          width: fit-content;
+        .auth-header-text p {
+          font-size: 13px; color: var(--text-muted); line-height: 1.5;
         }
 
-        .auth-tab {
-          padding: 7px 16px;
-          border-radius: calc(var(--radius) - 2px);
-          font-size: 13px;
-          font-weight: 500;
-          color: var(--text-muted);
-          cursor: pointer;
-          border: none;
-          background: transparent;
-          transition: all var(--transition);
-        }
+        .auth-form { display: flex; flex-direction: column; gap: 16px; }
 
-        .auth-tab.active {
-          background: var(--bg-surface);
-          color: var(--text-primary);
-          font-weight: 600;
-          box-shadow: var(--shadow-sm);
-        }
-
-        .auth-form {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-
-        .form-field {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
+        .form-field  { display: flex; flex-direction: column; gap: 6px; }
 
         .form-label {
-          font-size: 12.5px;
-          font-weight: 600;
-          color: var(--text-secondary);
-          letter-spacing: 0.01em;
+          font-size: 12.5px; font-weight: 600;
+          color: var(--text-secondary); letter-spacing: 0.01em;
         }
 
-        .input-icon-wrap {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
+        .input-icon-wrap { position: relative; display: flex; align-items: center; }
 
-        .input-icon {
-          position: absolute;
-          left: 11px;
-          color: var(--text-muted);
-          pointer-events: none;
-        }
+        .input-icon { position: absolute; left: 11px; color: var(--text-muted); pointer-events: none; }
 
-        .input-with-icon {
-          padding-left: 34px !important;
-        }
+        .input-with-icon { padding-left: 34px !important; }
 
         .input-icon-right {
-          position: absolute;
-          right: 10px;
-          background: transparent;
-          border: none;
+          position: absolute; right: 10px;
+          background: transparent; border: none;
+          color: var(--text-muted); cursor: pointer;
+          display: flex; transition: color var(--transition);
+        }
+        .input-icon-right:hover { color: var(--text-primary); }
+
+        .form-error { font-size: 12px; color: #ef4444; font-weight: 500; }
+
+        .auth-submit-btn {
+          width: 100% !important;
+          justify-content: center !important;
+          padding: 11px 14px !important;
+          font-size: 14px !important;
+          gap: 6px;
+          margin-top: 2px;
+        }
+
+        /* ── Toggle text ── */
+        .auth-switch-text {
+          text-align: center;
+          font-size: 13px;
           color: var(--text-muted);
-          cursor: pointer;
-          display: flex;
-          transition: color var(--transition);
+          margin: 2px 0 0;
         }
 
-        .input-icon-right:hover {
-          color: var(--text-primary);
-        }
-
-        .form-error {
-          font-size: 12px;
-          color: #ef4444;
-          font-weight: 500;
-        }
-
-        .forgot-link {
-          font-size: 12.5px;
+        .auth-switch-link {
           color: var(--accent);
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          text-align: right;
+          background: transparent; border: none;
+          cursor: pointer; font-size: 13px;
+          font-weight: 600;
           font-family: var(--font-display);
-          font-weight: 500;
-          margin-top: -8px;
+          text-decoration: underline;
+          text-underline-offset: 2px;
           transition: opacity var(--transition);
         }
+        .auth-switch-link:hover { opacity: 0.75; }
 
-        .forgot-link:hover {
-          opacity: 0.8;
-        }
-
+        /* ── Divider ── */
         .auth-divider {
-          position: relative;
-          text-align: center;
-          margin: 4px 0;
+          position: relative; text-align: center;
+          margin: 6px 0;
         }
-
         .auth-divider::before {
           content: '';
-          position: absolute;
-          top: 50%;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: var(--border-subtle);
+          position: absolute; top: 50%; left: 0; right: 0;
+          height: 1px; background: var(--border-subtle);
         }
-
         .auth-divider span {
           position: relative;
           background: var(--bg-base);
           padding: 0 12px;
-          font-size: 11px;
-          color: var(--text-muted);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.06em;
+          font-size: 11px; color: var(--text-muted);
+          font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;
         }
 
+        /* ── Google Button ── */
         .google-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          width: 100%;
+          display: flex; align-items: center; justify-content: center;
+          gap: 10px; width: 100%;
           padding: 10px 14px;
           background: var(--bg-elevated);
           border: 1px solid var(--border-default);
           border-radius: var(--radius);
           color: var(--text-primary);
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          font-family: var(--font-display);
+          font-size: 13px; font-weight: 600;
+          cursor: pointer; font-family: var(--font-display);
           transition: all var(--transition);
         }
-
         .google-btn:hover {
           background: var(--bg-surface);
           border-color: var(--border-strong);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
+        .auth-google-note {
+          text-align: center;
+          font-size: 11px;
+          color: var(--text-muted);
+          opacity: 0.7;
+          margin-top: -4px;
+        }
+
+        /* ── Spinner ── */
+        .spinner {
+          display: inline-block;
+          width: 13px; height: 13px;
+          border: 2px solid rgba(255,255,255,0.25);
+          border-top-color: white;
+          border-radius: 50%;
+          animation: spin 0.6s linear infinite;
+          margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Mobile ── */
         @media (max-width: 768px) {
           .auth-left { display: none; }
-          .auth-right { width: 100%; padding: 24px 20px; }
+          .auth-right { width: 100%; padding: 28px 20px; }
           .auth-logo-mobile { display: flex; }
         }
       `}</style>
@@ -695,7 +610,6 @@ function AuthContent() {
   );
 }
 
-// Outer page wraps AuthContent in Suspense (required by Next.js for useSearchParams)
 export default function AuthPage() {
   return (
     <Suspense fallback={
@@ -711,7 +625,6 @@ export default function AuthPage() {
 function GoogleBtn({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="google-btn">
-      {/* Google G logo SVG */}
       <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
         <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
         <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>

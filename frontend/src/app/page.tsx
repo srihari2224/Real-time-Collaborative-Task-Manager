@@ -22,22 +22,26 @@ export default function RootPage() {
       setSession(session);
       setToken(session.access_token);
 
-      // Sync to backend & get workspaces
+      // Sync to backend & get workspaces (backend failure is non-blocking)
       try {
         const syncRes = await api.post('/api/v1/auth/sync', {});
-        setUser(syncRes.data.data);
+        setUser(syncRes.data?.data ?? syncRes.data);
+      } catch {
+        console.warn('Backend sync failed — continuing with session only');
+      }
 
+      try {
         const wsRes = await api.get('/api/v1/workspaces');
         const workspaces = wsRes.data?.data ?? wsRes.data ?? [];
         if (workspaces.length > 0) {
           router.replace(`/workspace/${workspaces[0].id}`);
         } else {
-          // No workspace yet — go to a create-workspace page or auth
-          router.replace('/auth');
+          // No workspace yet — go to onboarding
+          router.replace('/onboarding');
         }
       } catch {
-        // Backend unreachable but session exists — still try to navigate
-        router.replace('/auth');
+        // Backend unreachable but session exists → onboarding, never /auth
+        router.replace('/onboarding');
       }
     });
   }, [router, setUser, setToken, setSession, logout]);

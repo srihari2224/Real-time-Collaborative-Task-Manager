@@ -40,15 +40,22 @@ function CallbackContent() {
       setSession(session);
       setToken(session.access_token);
 
+      // Step 1: Sync to backend (non-blocking — session is valid even if this fails)
       try {
         const syncRes = await api.post('/api/v1/auth/sync', {});
         setUser(syncRes.data?.data ?? syncRes.data);
+      } catch {
+        console.warn('Backend sync failed — continuing with Supabase session only');
+      }
+
+      // Step 2: Fetch workspaces and navigate — NEVER send back to /auth
+      try {
         const wsRes = await api.get('/api/v1/workspaces');
         const workspaces = wsRes.data?.data ?? wsRes.data ?? [];
-        router.replace(workspaces.length > 0 ? `/workspace/${workspaces[0].id}` : '/auth');
+        router.replace(workspaces.length > 0 ? `/workspace/${workspaces[0].id}` : '/onboarding');
       } catch {
-        // Backend unreachable — go home and let root page handle redirect
-        router.replace('/');
+        // Backend unreachable — go to onboarding, not /auth
+        router.replace('/onboarding');
       }
     };
 
