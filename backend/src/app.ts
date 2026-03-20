@@ -26,7 +26,19 @@ export const buildApp = async () => {
 
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
-    origin: env.cors.allowedOrigins,
+    origin: (origin, cb) => {
+      // Allow requests with no origin (curl, mobile apps, same-origin)
+      if (!origin) return cb(null, true);
+      const allowed = env.cors.allowedOrigins;
+      // Allow if explicitly listed, or if it's any vercel.app / localhost domain
+      const isAllowed =
+        allowed.includes('*') ||
+        allowed.includes(origin) ||
+        /\.vercel\.app$/.test(origin) ||
+        /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        /\.onrender\.com$/.test(origin);
+      cb(null, isAllowed ? true : new Error(`CORS: origin ${origin} not allowed`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

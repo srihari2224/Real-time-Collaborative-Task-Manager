@@ -1,15 +1,12 @@
 'use client';
 
 // Handles Supabase OAuth redirects for BOTH:
-//   1. PKCE code flow:               /auth/callback?code=...  (was previously in route.ts)
+//   1. PKCE code flow:               /auth/callback?code=...
 //   2. Implicit hash-fragment flow:  /auth/callback#access_token=...  (Google OAuth)
-//
-// Next.js does not allow both route.ts AND page.tsx in the same directory,
-// so both flows are handled here client-side.
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
@@ -20,18 +17,19 @@ function CallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser, setToken, setSession, logout } = useAuthStore();
+  // Use a ref so the "done" guard persists across re-renders without re-triggering the effect
+  const done = useRef(false);
 
   useEffect(() => {
-    let done = false;
-
-    // ✅ Strip #access_token=... hash from URL bar immediately
+    // ✅ Strip #access_token=... hash from URL bar immediately so tokens aren't visible
     if (typeof window !== 'undefined' && window.location.hash) {
       window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
     }
 
-    const navigateAfterSession = async (session: any) => {
-      if (done) return;
-      done = true;
+    const finish = async (session: any) => {
+      // Guard: only execute once no matter how many times Supabase fires events
+      if (done.current) return;
+      done.current = true;
 
       if (!session) {
         logout();
@@ -49,6 +47,7 @@ function CallbackContent() {
         const workspaces = wsRes.data?.data ?? wsRes.data ?? [];
         router.replace(workspaces.length > 0 ? `/workspace/${workspaces[0].id}` : '/auth');
       } catch {
+        // Backend unreachable — go home and let root page handle redirect
         router.replace('/');
       }
     };
@@ -57,26 +56,29 @@ function CallbackContent() {
     const code = searchParams?.get('code');
     if (code) {
       supabase.auth.exchangeCodeForSession(code)
-        .then(({ data, error }) => {
-          navigateAfterSession(error || !data.session ? null : data.session);
-        })
-        .catch(() => navigateAfterSession(null));
+        .then(({ data, error }) => finish(error || !data.session ? null : data.session))
+        .catch(() => finish(null));
       return;
     }
 
     // ── Path 2: Implicit hash flow (#access_token=...) ──────────────────────
-    // Supabase JS automatically parses the hash on onAuthStateChange
+    // Listen for auth state change — Supabase parses the hash automatically
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) navigateAfterSession(session);
+      if (session) finish(session);
     });
 
+    // Also check immediately — in case auth event fired before we subscribed
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) navigateAfterSession(session);
-      else setTimeout(() => { if (!done) navigateAfterSession(null); }, 3000);
+      if (session) finish(session);
+      else {
+        // If no session found after 4 seconds, something went wrong
+        setTimeout(() => { if (!done.current) finish(null); }, 4000);
+      }
     });
 
     return () => { subscription.unsubscribe(); };
-  }, [router, searchParams, setUser, setToken, setSession, logout]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← intentionally empty: we only run this once on mount
 
   return (
     <div style={{
@@ -94,7 +96,7 @@ function CallbackContent() {
   );
 }
 
-// useSearchParams requires Suspense in Next.js
+// useSearchParams must be wrapped in Suspense in Next.js 13+
 export default function AuthCallbackPage() {
   return (
     <Suspense fallback={
