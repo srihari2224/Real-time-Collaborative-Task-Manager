@@ -22,9 +22,9 @@ export default async function googleAuthRoutes(fastify: FastifyInstance) {
         // Verify the Google ID token
         const googleUser = await verifyGoogleToken(credential);
 
-        // Upsert user into our DB using Google's stable `sub` as the user ID
+        // Upsert user into our DB using the deterministic Google UUID
         const user = await userRepository.upsertUser({
-          id: `google_${googleUser.sub}`,
+          id: googleUser.id,
           email: googleUser.email,
           full_name: googleUser.name,
           avatar_url: googleUser.picture,

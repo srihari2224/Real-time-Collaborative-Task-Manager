@@ -31,7 +31,7 @@ export const requireAuth = async (req: FastifyRequest, reply: FastifyReply): Pro
     try {
       const googleUser = await verifyGoogleToken(token);
       req.user = await userRepository.upsertUser({
-        id: `google_${googleUser.sub}`,
+        id: googleUser.id,
         email: googleUser.email,
         full_name: googleUser.name,
         avatar_url: googleUser.picture,
