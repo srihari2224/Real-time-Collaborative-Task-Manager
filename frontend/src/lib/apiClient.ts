@@ -202,17 +202,17 @@ export const tasksApi = {
     projectId: string;
     title: string;
     description?: string;
-    status?: ApiTask['status'];
     priority?: ApiTask['priority'];
     assigneeIds?: string[];
+    assigneeEmails?: string[];
     dueDate?: string | null;
   }) => api.post(`${BASE}/tasks`, {
     project_id: data.projectId,
     title: data.title,
     description: data.description,
-    status: data.status,
     priority: data.priority,
     assignee_ids: data.assigneeIds ?? [],
+    assignee_emails: data.assigneeEmails ?? [],
     due_date: data.dueDate
   }).then(unwrap<ApiTask>),
   update: (
@@ -260,6 +260,13 @@ export const tasksApi = {
     api.get(`${BASE}/tasks/${id}/attachments`).then(unwrap<ApiAttachment[]>),
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`${BASE}/tasks/${id}/attachments/${attachmentId}`),
+};
+
+// ─── Users ──────────────────────────────────────────────────────────────────
+
+export const usersApi = {
+  lookupByEmail: (email: string) =>
+    api.get(`${BASE}/users/lookup?email=${encodeURIComponent(email)}`).then(unwrap<ApiUser>),
 };
 
 // ─── Notifications ───────────────────────────────────────────────────────────

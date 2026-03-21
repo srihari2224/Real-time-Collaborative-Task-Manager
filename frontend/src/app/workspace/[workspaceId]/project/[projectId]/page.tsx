@@ -3,16 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { TopBar } from '@/components/layout/TopBar';
-import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ViewType } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
-import { projectsApi, tasksApi, type ApiProject, type ApiTask } from '@/lib/apiClient';
-import { AssigneePicker, type AssigneeInfo } from '@/components/ui/AssigneePicker';
+import { projectsApi, tasksApi, usersApi, type ApiProject, type ApiTask, type ApiUser } from '@/lib/apiClient';
 import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
-  LayoutGrid, List, Calendar, BarChart2, Filter,
+  List, Calendar, BarChart2, Filter,
   Share2, ChevronDown, ChevronRight, Plus, Loader2, X
 } from 'lucide-react';
 import { formatDate, isOverdue, PRIORITY_CONFIG } from '@/lib/utils';
@@ -223,18 +221,36 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
   const [priority, setPriority]   = useState<ApiTask['priority']>('medium');
   const [dueDate, setDueDate]     = useState('');
   const [emailInput, setEmailInput] = useState('');
-  const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
+  const [assignees, setAssignees] = useState<ApiUser[]>([]);
+  const [assigneeLookupError, setAssigneeLookupError] = useState<string | null>(null);
+  const [addingAssignee, setAddingAssignee] = useState(false);
   const [saving, setSaving]       = useState(false);
 
-  const addEmail = () => {
+  const addEmail = async () => {
     const e = emailInput.trim().toLowerCase();
-    if (!e || assigneeEmails.includes(e)) { setEmailInput(''); return; }
-    setAssigneeEmails((prev) => [...prev, e]);
-    setEmailInput('');
+    if (!e) return;
+    if (assignees.some((a) => a.email.toLowerCase() === e)) {
+      setEmailInput('');
+      return;
+    }
+    setAddingAssignee(true);
+    setAssigneeLookupError(null);
+    try {
+      const user = await usersApi.lookupByEmail(e);
+      setAssignees((prev) => [...prev, user]);
+      setEmailInput('');
+      toast.success('Assignee added');
+    } catch {
+      const msg = 'User not found';
+      setAssigneeLookupError(msg);
+      toast.error(msg);
+    } finally {
+      setAddingAssignee(false);
+    }
   };
 
   const removeEmail = (email: string) =>
-    setAssigneeEmails((prev) => prev.filter((e) => e !== email));
+    setAssignees((prev) => prev.filter((u) => u.email !== email));
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
@@ -248,7 +264,7 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
         description: description.trim() || undefined,
         priority,
         dueDate: dueDate || undefined,
-        assigneeEmails,
+        assigneeEmails: assignees.map((a) => a.email),
       } as any);
       toast.success('Task created!');
       onCreated(task);
@@ -309,23 +325,27 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEmail())}
                 style={{ flex: 1, fontSize: 13 }}
               />
-              <button type="button" className="btn btn-secondary" onClick={addEmail} style={{ flexShrink: 0, padding: '6px 12px' }}>
-                <Plus size={13} />
+              <button type="button" className="btn btn-secondary" onClick={addEmail} style={{ flexShrink: 0, padding: '6px 12px' }} disabled={addingAssignee}>
+                {addingAssignee ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={13} />}
               </button>
             </div>
-            {assigneeEmails.length > 0 && (
+            {assignees.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                {assigneeEmails.map((email) => (
-                  <div key={email} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
-                    {email}
-                    <button type="button" onClick={() => removeEmail(email)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', padding: 0 }}>
+                {assignees.map((user) => (
+                  <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
+                    {user.full_name ?? user.email}
+                    <button type="button" onClick={() => removeEmail(user.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', padding: 0 }}>
                       <X size={11} />
                     </button>
                   </div>
                 ))}
               </div>
             )}
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Assignees will be notified and can see this task</p>
+            {assigneeLookupError ? (
+              <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{assigneeLookupError}</p>
+            ) : (
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Only registered users can be assigned</p>
+            )}
           </div>
 
           {/* Due Date */}

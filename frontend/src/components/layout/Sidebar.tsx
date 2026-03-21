@@ -26,6 +26,7 @@ export function Sidebar() {
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
   const [projects, setProjects] = useState<ApiProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState(true);
 
   // Modal states
   const [showNewWorkspace, setShowNewWorkspace] = useState(false);
@@ -42,8 +43,19 @@ export function Sidebar() {
 
   // Load workspaces
   useEffect(() => {
-    workspacesApi.list().then(setWorkspaces).catch(() => {});
+    setLoadingWorkspaces(true);
+    workspacesApi.list()
+      .then(setWorkspaces)
+      .catch(() => setWorkspaces([]))
+      .finally(() => setLoadingWorkspaces(false));
   }, []);
+
+  // If user lands outside a workspace route, hydrate to first workspace.
+  useEffect(() => {
+    if (loadingWorkspaces) return;
+    if (workspaceId || !workspaces.length) return;
+    router.replace(`/workspace/${workspaces[0].id}`);
+  }, [loadingWorkspaces, workspaceId, workspaces, router]);
 
   // Load notification count
   useEffect(() => {
@@ -132,7 +144,9 @@ export function Sidebar() {
           <div className="workspace-logo">{wsLetter}</div>
           {sidebarOpen && (
             <div className="workspace-info">
-              <span className="workspace-name">{currentWorkspace?.name ?? 'Loading...'}</span>
+              <span className="workspace-name">
+                {currentWorkspace?.name ?? (loadingWorkspaces ? 'Loading...' : 'No workspace')}
+              </span>
               <span className="workspace-plan">Free plan</span>
             </div>
           )}

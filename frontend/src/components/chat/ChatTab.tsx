@@ -76,6 +76,17 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Tracks real IDs of messages we sent so socket echo is ignored
   const sentIdsRef = useRef<Set<string>>(new Set());
+  const dedupeById = (items: LocalMessage[]) => {
+    const seen = new Set<string>();
+    const out: LocalMessage[] = [];
+    for (let i = items.length - 1; i >= 0; i--) {
+      const m = items[i];
+      if (seen.has(m.id)) continue;
+      seen.add(m.id);
+      out.push(m);
+    }
+    return out.reverse();
+  };
 
   const me = {
     id: currentUser?.id ?? currentUserId,
@@ -126,7 +137,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
             sentIdsRef.current.delete(msg.id);
             return;
           }
-          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          setMessages((prev) => dedupeById([...prev, msg]));
         });
 
         s.on(SOCKET_EVENTS.COMMENT_DELETED, (data: { commentId: string }) => {
@@ -215,7 +226,9 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
     try {
       const saved = await tasksApi.addComment(taskId, content);
       sentIdsRef.current.add(saved.id);
-      setMessages((prev) => prev.map((m) => m.id === optimisticId ? apiCommentToMessage(saved) : m));
+      setMessages((prev) => dedupeById(
+        prev.map((m) => m.id === optimisticId ? apiCommentToMessage(saved) : m)
+      ));
 
       // Create notifications for mentioned members
       for (const name of mentionedNames) {

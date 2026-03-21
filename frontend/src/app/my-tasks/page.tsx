@@ -8,6 +8,7 @@ import { formatDate, isOverdue, isDueToday, isDueThisWeek } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
 import { workspacesApi, projectsApi, tasksApi, type ApiTask } from '@/lib/apiClient';
+import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { MessageSquare, Calendar, CheckSquare, AlertTriangle, Loader2 } from 'lucide-react';
 
 const PRIORITY_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
@@ -49,6 +50,54 @@ export default function MyTasksPage() {
     };
 
     loadMyTasks();
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    let mounted = true;
+    let socket: Awaited<ReturnType<typeof getSocket>> | null = null;
+    const workspaceIds = new Set<string>();
+
+    const hydrateWorkspaceRooms = async () => {
+      try {
+        const list = await workspacesApi.list();
+        list.forEach((w) => workspaceIds.add(w.id));
+        socket = await getSocket();
+        if (!mounted) return;
+        workspaceIds.forEach((id) => socket?.emit(SOCKET_EVENTS.JOIN_WORKSPACE, id));
+
+        const reload = async () => {
+          try {
+            const projectArrays = await Promise.all(
+              list.map((ws) => projectsApi.listByWorkspace(ws.id).catch(() => []))
+            );
+            const allProjects = projectArrays.flat();
+            const taskArrays = await Promise.all(
+              allProjects.map((p) => tasksApi.listByProject(p.id).catch(() => []))
+            );
+            const allTasks = taskArrays.flat();
+            const mine = allTasks.filter((t) => (t.assignees ?? []).some((a) => a.id === currentUserId));
+            if (mounted) setTasks(mine);
+          } catch {}
+        };
+
+        socket.on(SOCKET_EVENTS.TASK_CREATED, reload);
+        socket.on(SOCKET_EVENTS.TASK_UPDATED, reload);
+        socket.on(SOCKET_EVENTS.TASK_DELETED, reload);
+      } catch {}
+    };
+
+    hydrateWorkspaceRooms();
+
+    return () => {
+      mounted = false;
+      if (socket) {
+        workspaceIds.forEach((id) => socket?.emit(SOCKET_EVENTS.LEAVE_WORKSPACE, id));
+        socket.off(SOCKET_EVENTS.TASK_CREATED);
+        socket.off(SOCKET_EVENTS.TASK_UPDATED);
+        socket.off(SOCKET_EVENTS.TASK_DELETED);
+      }
+    };
   }, [currentUserId]);
 
   const activeTasks = tasks.filter((t) => t.status !== 'done');
