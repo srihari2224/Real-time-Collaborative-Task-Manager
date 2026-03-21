@@ -3,18 +3,37 @@ import { query } from '../config/database.js';
 import type { User } from '../types/index.js';
 
 export const upsertUser = async (data: { id: string; email: string; full_name?: string | null; avatar_url?: string | null }): Promise<User> => {
-  const { rows } = await query(
-    `INSERT INTO users (id, email, full_name, avatar_url)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (id) DO UPDATE
-       SET email = EXCLUDED.email,
-           full_name  = COALESCE(EXCLUDED.full_name, users.full_name),
-           avatar_url = COALESCE(EXCLUDED.avatar_url, users.avatar_url),
+  // 1. Try to find existing user by ID (Normal Supabase login)
+  let user = await findById(data.id);
+
+  if (!user) {
+    // 2. Try to find existing user by Email (Google login for an account that already exists via Supabase)
+    user = await findByEmail(data.email);
+  }
+
+  if (user) {
+    // 3. Update existing user (forces keeping their original ID so we don't break foreign keys)
+    const { rows } = await query(
+      `UPDATE users 
+       SET email = $2,
+           full_name = COALESCE($3, full_name), 
+           avatar_url = COALESCE($4, avatar_url), 
            updated_at = NOW()
-     RETURNING *`,
-    [data.id, data.email, data.full_name ?? null, data.avatar_url ?? null]
-  );
-  return rows[0] as User;
+       WHERE id = $1 
+       RETURNING *`,
+      [user.id, data.email, data.full_name ?? null, data.avatar_url ?? null]
+    );
+    return rows[0] as User;
+  } else {
+    // 4. Truly new user, safe to insert
+    const { rows } = await query(
+      `INSERT INTO users (id, email, full_name, avatar_url)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [data.id, data.email, data.full_name ?? null, data.avatar_url ?? null]
+    );
+    return rows[0] as User;
+  }
 };
 
 export const findById = async (id: string): Promise<User | null> => {

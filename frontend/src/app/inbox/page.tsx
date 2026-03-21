@@ -8,12 +8,12 @@ import { Bell, MessageSquare, UserCheck, AlertTriangle, CheckCircle2, Activity, 
 import { motion } from 'framer-motion';
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
-  task_assigned:      <UserCheck size={14} style={{ color: '#22c55e' }} />,
-  mention_description:<Bell size={14} style={{ color: '#6366f1' }} />,
-  mention_chat:       <MessageSquare size={14} style={{ color: 'var(--accent)' }} />,
-  chat_message:       <MessageSquare size={14} style={{ color: 'var(--accent)' }} />,
-  task_overdue:       <AlertTriangle size={14} style={{ color: '#ef4444' }} />,
-  status_changed:     <Activity size={14} style={{ color: '#f59e0b' }} />,
+  task_assigned: <UserCheck size={14} style={{ color: '#22c55e' }} />,
+  mention_description: <Bell size={14} style={{ color: '#6366f1' }} />,
+  mention_chat: <MessageSquare size={14} style={{ color: 'var(--accent)' }} />,
+  chat_message: <MessageSquare size={14} style={{ color: 'var(--accent)' }} />,
+  task_overdue: <AlertTriangle size={14} style={{ color: '#ef4444' }} />,
+  status_changed: <Activity size={14} style={{ color: '#f59e0b' }} />,
 };
 
 export default function InboxPage() {
@@ -29,12 +29,12 @@ export default function InboxPage() {
 
   const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-    await notificationsApi.markAllRead().catch(() => {});
+    await notificationsApi.markAllRead().catch(() => { });
   };
 
   const markRead = async (id: string) => {
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
-    await notificationsApi.markRead(id).catch(() => {});
+    await notificationsApi.markRead(id).catch(() => { });
   };
 
   const unread = notifications.filter((n) => !n.is_read).length;
