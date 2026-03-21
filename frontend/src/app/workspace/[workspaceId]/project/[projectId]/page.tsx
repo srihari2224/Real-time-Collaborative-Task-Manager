@@ -369,14 +369,37 @@ function ListView({ sections, tasks, onTaskClick, onAddTask }: any) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   return (
     <div className="scroll-y" style={{ height: '100%', padding: '16px 20px' }}>
-      {/* Add Task Button in content area */}
-      <div style={{ marginBottom: 16 }}>
+      {/* Add Task Button - Centered in content area */}
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
         <button 
-          className="btn btn-primary" 
-          style={{ fontSize: 12, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
           onClick={onAddTask}
+          style={{ 
+            fontSize: 14, 
+            padding: '10px 24px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 8,
+            background: '#2563eb',
+            color: 'white',
+            border: 'none',
+            borderRadius: 8,
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#1d4ed8';
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 4px 8px rgba(37, 99, 235, 0.3)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = '#2563eb';
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(37, 99, 235, 0.2)';
+          }}
         >
-          <Plus size={12} /> Add Task
+          <Plus size={16} /> Add Task
         </button>
       </div>
       
