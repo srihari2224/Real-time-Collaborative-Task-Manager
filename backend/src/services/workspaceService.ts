@@ -2,6 +2,7 @@
 import type { Workspace, WorkspaceMember } from '../types/index.js';
 import * as workspaceRepository from '../repositories/workspaceRepository.js';
 import * as userRepository from '../repositories/userRepository.js';
+import { inviteUser } from '../config/supabase.js';
 
 export const createWorkspace = async (
   userId: string,
@@ -31,11 +32,20 @@ export const inviteMember = async (
   workspaceId: string,
   data: { email: string; role: 'admin' | 'member' | 'guest' }
 ): Promise<WorkspaceMember> => {
-  const user = await userRepository.findByEmail(data.email);
+  let user = await userRepository.findByEmail(data.email);
   if (!user) {
-    const err = new Error(`No user found with email: ${data.email}. They must sign up first.`);
-    (err as NodeJS.ErrnoException).code = '404';
-    throw Object.assign(err, { statusCode: 404 });
+    try {
+      const authUser = await inviteUser(data.email);
+      user = await userRepository.upsertUser({ 
+        id: authUser.id, 
+        email: authUser.email || data.email,
+        full_name: null,
+      });
+    } catch (err: any) {
+      const customErr = new Error(`Failed to invite user: ${err.message}`);
+      (customErr as NodeJS.ErrnoException).code = '400';
+      throw Object.assign(customErr, { statusCode: 400 });
+    }
   }
   return workspaceRepository.addMember(workspaceId, user.id, data.role);
 };

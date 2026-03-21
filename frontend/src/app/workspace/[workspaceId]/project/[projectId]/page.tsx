@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, CSSProperties } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TopBar } from '@/components/layout/TopBar';
 import { ViewType } from '@/types';
@@ -18,7 +18,7 @@ import {
 import {
   List, Calendar, BarChart2,
   Plus, Loader2, X,
-  Sparkles, AlertTriangle, ChevronLeft, ChevronRight,
+  Sparkles, AlertTriangle, ChevronLeft, ChevronRight, Trash2,
 } from 'lucide-react';
 import { formatDate, isOverdue } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -79,6 +79,7 @@ const KANBAN_COLUMNS: {
 /* ─────────────────────────────────────────────────────────────────────────── */
 export default function ProjectPage() {
   const params = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { activeView, setActiveView, openTaskPanel } = useUIStore();
   const projectId = params?.projectId as string;
@@ -148,6 +149,17 @@ export default function ProjectPage() {
     };
   }, [workspaceId, projectId, queryClient]);
 
+  const handleDeleteProject = async () => {
+    if (!confirm('Are you sure you want to delete this project?')) return;
+    try {
+      await projectsApi.delete(projectId);
+      toast.success('Project deleted');
+      router.push(`/workspace/${workspaceId}`);
+    } catch {
+      toast.error('Failed to delete project');
+    }
+  };
+
   const kanbanTasks: KanbanTask[] = tasks.map((t) => ({
     ...t,
     section_id: t.status,
@@ -186,7 +198,19 @@ export default function ProjectPage() {
     <>
       <style>{CSS}</style>
       <div className="pp-root">
-        <TopBar title={project?.name ?? 'Project'} />
+        <TopBar
+          title={project?.name ?? 'Project'}
+          actions={
+            <button
+              onClick={handleDeleteProject}
+              className="topbar-icon-btn"
+              style={{ color: '#ef4444' }}
+              title="Delete Project"
+            >
+              <Trash2 size={15} />
+            </button>
+          }
+        />
 
         <div className="pp-view-bar">
           <div className="pp-view-tabs">

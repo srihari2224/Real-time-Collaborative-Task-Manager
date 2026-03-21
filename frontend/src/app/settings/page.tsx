@@ -10,7 +10,6 @@ import {
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { workspacesApi, type ApiWorkspace, type ApiWorkspaceMember } from '@/lib/apiClient';
-import { ProfileEditModal } from '@/components/profile/ProfileEditModal';
 
 const ROLES: WorkspaceRole[] = ['owner', 'admin', 'member', 'guest'];
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
@@ -34,7 +33,6 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
   /* ── Data ── */
   useEffect(() => {
@@ -122,25 +120,11 @@ export default function SettingsPage() {
         <div className="st-body">
           <div className="st-content">
 
-            {/* ── Section: General ── */}
+            {/* ── Section: Workspace Name ── */}
             <section className="st-section">
-              <div className="st-section-header">
-                <Settings size={14} style={{ color: 'var(--st-accent)' } as CSSProperties} />
-                <span>General</span>
-              </div>
-
-              {/* Profile shortcut */}
-              <button type="button" className="st-profile-link" onClick={() => setProfileModalOpen(true)}>
-                <div className="st-profile-icon"><User size={16} /></div>
-                <div className="st-profile-text">
-                  <span className="st-profile-title">Edit Profile &amp; Avatar</span>
-                  <span className="st-profile-sub">Change your name, photo, or choose an avatar</span>
-                </div>
-              </button>
-
-              <div className="st-fields">
+              <div className="st-fields" style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 {/* Workspace name */}
-                <div className="st-field">
+                <div className="st-field" style={{ flex: 1 }}>
                   <label className="st-label" htmlFor="ws-name-input">Workspace Name</label>
                   <input
                     id="ws-name-input"
@@ -158,6 +142,7 @@ export default function SettingsPage() {
                   className="st-save-btn"
                   onClick={handleSaveGeneral}
                   disabled={saving}
+                  style={{ alignSelf: 'auto', marginBottom: '2px', height: '43px' }}
                 >
                   {saving ? <><span className="st-spin-sm" />Saving…</> : 'Save Changes'}
                 </button>
@@ -311,8 +296,6 @@ export default function SettingsPage() {
 
           </div>
         </div>
-
-        <ProfileEditModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
       </div>
     </>
   );
@@ -411,30 +394,7 @@ html.dark .st-root {
   border-radius: 99px; font-size: 11px; font-weight: 700;
 }
 
-/* Profile link */
-.st-profile-link {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 20px;
-  border: none;
-  border-bottom: 1px solid var(--st-border);
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-  background: transparent;
-  transition: background var(--st-t);
-}
-.st-profile-link:hover { background: var(--st-elev); }
-.st-profile-icon {
-  width: 38px; height: 38px; border-radius: 50%;
-  background: var(--st-acc-soft); color: var(--st-accent);
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.st-profile-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.st-profile-title { font-size: 13.5px; font-weight: 600; color: var(--st-txt); }
-.st-profile-sub   { font-size: 12px; color: var(--st-muted); }
-.st-profile-arrow { color: var(--st-muted); flex-shrink: 0; }
+
 
 /* Fields */
 .st-fields {
@@ -650,7 +610,6 @@ html.dark .st-root {
   .st-member-row { grid-template-columns: 1fr 80px 36px; padding: 11px 14px; }
   .st-fields { padding: 16px 14px; }
   .st-section-header { padding: 13px 14px; }
-  .st-profile-link { padding: 12px 14px; }
   .st-input { max-width: 100%; font-size: 16px; }
   .st-danger-box { flex-direction: column; }
 }

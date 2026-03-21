@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Avatar } from '@/components/ui/Avatar';
-import { formatRelativeTime } from '@/lib/utils';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { formatRelativeTime, getInitials } from '@/lib/utils';
 import {
   Send, Smile, Search, Pin, Reply, Edit3, Trash2, X, ChevronRight, Loader2, AtSign
 } from 'lucide-react';
@@ -13,6 +12,70 @@ import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { notificationsApi } from '@/lib/apiClient';
 
 const EMOJI_LIST = ['👍', '❤️', '🔥', '🚀', '💯', '😂', '😮', '🎉'];
+
+// ─── Shared UI Component: Avatar ─────────────────────────────────────────────
+
+interface UserType {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+  [key: string]: any;
+}
+
+interface AvatarProps {
+  user: UserType;
+  size?: number;
+  showPresence?: boolean;
+}
+
+const COLORS = ['#ff6b47', '#6366f1', '#22c55e', '#f59e0b', '#ec4899', '#14b8a6'];
+
+function colorForUser(userId: string) {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  return COLORS[Math.abs(hash) % COLORS.length];
+}
+
+function Avatar({ user, size = 28, showPresence = false }: AvatarProps) {
+  const color = colorForUser(user.id);
+
+  return (
+    <div
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
+      title={user.name}
+    >
+      {user.avatar_url ? (
+        <img
+          src={user.avatar_url}
+          alt={user.name}
+          style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div
+          className="avatar"
+          style={{
+            width: size,
+            height: size,
+            background: color + '20',
+            color,
+            fontSize: size * 0.38,
+            fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '50%'
+          }}
+        >
+          {getInitials(user.name)}
+        </div>
+      )}
+      {showPresence && <div className="presence-dot" />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 interface LocalMessage {
   id: string;
@@ -564,7 +627,6 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
             </div>
           </div>
         </div>
-        <p className="chat-input-hint">Enter to send · Shift+Enter for new line · @ to mention</p>
       </div>
 
       <style jsx>{`
@@ -951,13 +1013,6 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
           transform: translateY(-1px);
         }
         .chat-send-btn:disabled { cursor: not-allowed; }
-
-        .chat-input-hint {
-          font-size: 10.5px;
-          color: var(--text-faint);
-          margin-top: 5px;
-          font-weight: 500;
-        }
 
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

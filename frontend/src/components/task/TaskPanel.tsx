@@ -15,7 +15,6 @@ import {
 } from '@/lib/apiClient';
 import { Priority } from '@/types';
 import { ChatTab } from '@/components/chat/ChatTab';
-import { ProgressBar } from '@/components/ui/ProgressBar';
 import { formatDate, isOverdue, formatRelativeTime, PRIORITY_CONFIG, formatFileSize } from '@/lib/utils';
 import toast from 'react-hot-toast';
 import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
@@ -78,6 +77,19 @@ export function TaskPanel() {
     }
   };
 
+  const handleDeleteTask = async () => {
+    if (!task) return;
+    const ok = window.confirm('Are you sure you want to delete this task?');
+    if (!ok) return;
+    try {
+      await tasksApi.delete(task.id);
+      toast.success('Task deleted');
+      closeTaskPanel();
+    } catch {
+      toast.error('Failed to delete task');
+    }
+  };
+
   const overdue = isOverdue(task?.due_date ?? undefined);
 
   return (
@@ -126,9 +138,14 @@ export function TaskPanel() {
                         {title}
                       </h2>
                     )}
-                    <button className="panel-close-btn" onClick={closeTaskPanel}>
-                      <X size={14} />
-                    </button>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="panel-close-btn" onClick={handleDeleteTask} title="Delete Task" style={{ color: '#ef4444' }}>
+                        <Trash2 size={14} />
+                      </button>
+                      <button className="panel-close-btn" onClick={closeTaskPanel}>
+                        <X size={14} />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Assignee mini row */}
@@ -373,6 +390,35 @@ export function TaskPanel() {
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// ─── Shared UI Component: ProgressBar ──────────────────────────────────────────
+
+interface ProgressBarProps {
+  value: number; // 0–100
+  label?: string;
+  size?: 'sm' | 'md';
+}
+
+function ProgressBar({ value, label, size = 'sm' }: ProgressBarProps) {
+  const h = size === 'sm' ? 5 : 7;
+
+  return (
+    <div>
+      {label && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+          <span>{label}</span>
+          <span>{Math.round(value)}%</span>
+        </div>
+      )}
+      <div className="progress-bar-bg" style={{ height: h }}>
+        <div
+          className="progress-bar-fill"
+          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -834,6 +880,7 @@ function AttachmentsTab({ taskId }: { taskId: string }) {
   const [attachments, setAttachments] = useState<ApiAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [previewAtt, setPreviewAtt] = useState<ApiAttachment | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -898,27 +945,119 @@ function AttachmentsTab({ taskId }: { taskId: string }) {
           <p style={{ fontSize: 12, opacity: 0.7 }}>Click "Add File" to upload</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          {attachments.map((att) => (
-            <div key={att.id} style={{ position: 'relative', background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius)', padding: 12, transition: 'border-color var(--transition)' }}>
-              <a href={att.url ?? att.file_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-                  {att.filename ?? att.file_name}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {formatFileSize(att.size_bytes ?? att.file_size)}
-                </div>
-              </a>
-              <button
-                onClick={() => handleDelete(att.id)}
-                style={{ position: 'absolute', top: 8, right: 8, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', borderRadius: 4, transition: 'color var(--transition)' }}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 10 }}>
+          {attachments.map((att) => {
+            const url = att.url ?? att.file_url ?? '';
+            const filename = (att.filename ?? att.file_name ?? '').toLowerCase();
+            const isImage = /\.(png|jpe?g|gif|webp|svg)$/i.test(filename);
+            const isPdf = /\.pdf$/i.test(filename);
+            const canPreview = isImage || isPdf;
+
+            return (
+              <div
+                key={att.id}
+                style={{
+                  position: 'relative',
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius)',
+                  overflow: 'hidden',
+                  transition: 'border-color var(--transition)'
+                }}
               >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          ))}
+                {canPreview ? (
+                  <button
+                    onClick={() => setPreviewAtt(att)}
+                    style={{
+                      width: '100%',
+                      height: 100,
+                      background: 'var(--bg-surface)',
+                      display: 'block',
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'zoom-in'
+                    }}
+                  >
+                    {isImage && (
+                      <img src={url} alt={filename} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    )}
+                    {isPdf && (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(37,99,235,0.05)', color: 'var(--accent)' }}>
+                        <div style={{ fontWeight: 800, fontSize: 18 }}>PDF</div>
+                      </div>
+                    )}
+                  </button>
+                ) : (
+                  <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-surface)' }}>
+                    <Paperclip size={24} style={{ color: 'var(--text-muted)' }} />
+                  </div>
+                )}
+                <div style={{ padding: 10 }}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 3, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                      {att.filename ?? att.file_name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      {formatFileSize(att.size_bytes ?? att.file_size)}
+                    </div>
+                  </a>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(att.id); }}
+                  style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.5)', border: 'none', cursor: 'pointer', color: 'white', padding: 4, display: 'flex', borderRadius: 4, transition: 'all var(--transition)' }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
+
+      {/* Preview Overlay */}
+      <AnimatePresence>
+        {previewAtt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setPreviewAtt(null)}
+            style={{
+              position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0,0,0,0.85)',
+              zIndex: 999999,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 40
+            }}
+          >
+            <button
+              onClick={() => setPreviewAtt(null)}
+              style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: 40, height: 40, borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <X size={24} />
+            </button>
+            <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+              {/\.(png|jpe?g|gif|webp|svg)$/i.test(previewAtt.filename ?? previewAtt.file_name ?? '') ? (
+                <img
+                  src={previewAtt.url ?? previewAtt.file_url}
+                  alt={previewAtt.filename ?? previewAtt.file_name}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 40px rgba(0,0,0,0.3)' }}
+                />
+              ) : (
+                <iframe
+                  src={(previewAtt.url ?? previewAtt.file_url) + '#toolbar=0'}
+                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, background: 'white' }}
+                />
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

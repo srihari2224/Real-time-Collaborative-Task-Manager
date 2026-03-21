@@ -165,8 +165,10 @@ export function TopBar({ title, actions }: TopBarProps) {
         }
 
         .topbar-avatar-img {
-          width: 100%;
-          height: 100%;
+          width: 36px;
+          height: 36px;
+          min-width: 0;
+          min-height: 0;
           object-fit: cover;
         }
 

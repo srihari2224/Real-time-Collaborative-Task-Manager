@@ -4,13 +4,14 @@ import Link from 'next/link';
 import { usePathname, useRouter, useParams } from 'next/navigation';
 import {
   CheckSquare, Calendar, Settings, LogOut, Plus,
-  Loader2, X,
+  Loader2, X, ChevronLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { workspacesApi, projectsApi, type ApiWorkspace, type ApiProject } from '@/lib/apiClient';
 import { getInitials } from '@/lib/utils';
 import { useState, useEffect, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useUIStore } from '@/stores/uiStore';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
@@ -19,6 +20,7 @@ export function Sidebar() {
   const router = useRouter();
   const params = useParams();
   const { user, logout } = useAuthStore();
+  const { sidebarOpen, toggleSidebar } = useUIStore();
 
   const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<ApiWorkspace[]>([]);
@@ -126,19 +128,24 @@ export function Sidebar() {
 
   return (
     <>
-      <nav className="sidebar">
+      <nav className={`sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
+        <button className="sidebar-toggle-btn" onClick={toggleSidebar} title="Toggle Sidebar">
+          <ChevronLeft size={14} style={{ transform: !sidebarOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </button>
+
         {/* Workspace Header */}
         <div
           className="sidebar-workspace"
-          onClick={() => setWorkspaceSwitcherOpen(!workspaceSwitcherOpen)}
+          onClick={() => { if (sidebarOpen) setWorkspaceSwitcherOpen(!workspaceSwitcherOpen); else toggleSidebar(); }}
         >
           <div className="workspace-logo">{wsLetter}</div>
-          <div className="workspace-info">
-            <span className="workspace-name">
-              {currentWorkspace?.name ?? (loadingWorkspaces ? 'Loading...' : 'No workspace')}
-            </span>
-            <span className="workspace-plan">Free plan</span>
-          </div>
+          {sidebarOpen && (
+            <div className="workspace-info">
+              <span className="workspace-name">
+                {currentWorkspace?.name ?? (loadingWorkspaces ? 'Loading...' : 'No workspace')}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Workspace Switcher */}
@@ -188,24 +195,26 @@ export function Sidebar() {
               onClick={(e) => { if (item.disabled) e.preventDefault(); }}
             >
               <span className="nav-icon">{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
+              {sidebarOpen && <span style={{ flex: 1 }}>{item.label}</span>}
             </Link>
           ))}
         </div>
 
         {/* Projects */}
         <div className="sidebar-section sidebar-projects">
-          <div className="sidebar-section-header">
-            <span className="sidebar-section-label" style={{ padding: 0 }}>Projects</span>
-            <button
-              className="sidebar-icon-btn"
-              title="New project"
-              onClick={() => setShowNewProject(true)}
-              disabled={!currentWorkspace}
-            >
-              <Plus size={13} />
-            </button>
-          </div>
+          {sidebarOpen && (
+            <div className="sidebar-section-header">
+              <span className="sidebar-section-label" style={{ padding: 0 }}>Projects</span>
+              <button
+                className="sidebar-icon-btn"
+                title="New project"
+                onClick={() => setShowNewProject(true)}
+                disabled={!currentWorkspace}
+              >
+                <Plus size={13} />
+              </button>
+            </div>
+          )}
           <div className="scroll-y" style={{ flex: 1 }}>
             {loadingProjects ? (
               <div style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12 }}>
