@@ -566,6 +566,8 @@ function MetaField({ label, icon, children }: { label: string; icon: React.React
 function AttachmentsTab({ taskId }: { taskId: string }) {
   const [attachments, setAttachments] = useState<ApiAttachment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -573,6 +575,25 @@ function AttachmentsTab({ taskId }: { taskId: string }) {
       .then(setAttachments).catch(() => setAttachments([]))
       .finally(() => setLoading(false));
   }, [taskId]);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    try {
+      const attachment = await tasksApi.uploadAttachment(taskId, file);
+      setAttachments((prev) => [attachment, ...prev]);
+      toast.success('File uploaded successfully');
+    } catch {
+      toast.error('Failed to upload file');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -590,11 +611,29 @@ function AttachmentsTab({ taskId }: { taskId: string }) {
 
   return (
     <div className="scroll-y" style={{ flex: 1, padding: '20px' }}>
-      <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Attachments ({attachments.length})</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 700 }}>Attachments ({attachments.length})</h3>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="btn btn-primary btn-sm"
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          {uploading ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={12} />}
+          {uploading ? 'Uploading...' : 'Add File'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+        />
+      </div>
       {attachments.length === 0 ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Paperclip size={32} style={{ marginBottom: 10, opacity: 0.3 }} />
           <p style={{ fontSize: 13 }}>No attachments yet</p>
+          <p style={{ fontSize: 12, marginTop: 8 }}>Click "Add File" to upload</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

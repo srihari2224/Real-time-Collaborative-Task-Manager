@@ -152,9 +152,6 @@ export default function ProjectPage() {
             <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
               <Share2 size={12} /> Share
             </button>
-            <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 10px' }} onClick={() => setShowNewTask(true)}>
-              <Plus size={12} /> New Task
-            </button>
           </div>
         }
       />
@@ -183,7 +180,7 @@ export default function ProjectPage() {
       {/* Main Content */}
       <div style={{ flex: 1, overflow: 'hidden', padding: activeView === 'kanban' ? '16px 20px' : '0' }}>
         {activeView === 'list' && (
-          <ListView sections={kanbanSections} tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
+          <ListView sections={kanbanSections} tasks={kanbanTasks as any} onTaskClick={openTaskPanel} onAddTask={() => setShowNewTask(true)} />
         )}
         {activeView === 'calendar' && (
           <CalendarView tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
@@ -368,10 +365,21 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
-function ListView({ sections, tasks, onTaskClick }: any) {
+function ListView({ sections, tasks, onTaskClick, onAddTask }: any) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   return (
     <div className="scroll-y" style={{ height: '100%', padding: '16px 20px' }}>
+      {/* Add Task Button in content area */}
+      <div style={{ marginBottom: 16 }}>
+        <button 
+          className="btn btn-primary" 
+          style={{ fontSize: 12, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6 }}
+          onClick={onAddTask}
+        >
+          <Plus size={12} /> Add Task
+        </button>
+      </div>
+      
       {sections.map((sec: any) => {
         const secTasks = tasks.filter((t: any) => t.section_id === sec.id);
         const isCollapsed = collapsed[sec.id];

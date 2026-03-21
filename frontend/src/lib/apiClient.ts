@@ -258,6 +258,13 @@ export const tasksApi = {
   // Attachments
   listAttachments: (id: string) =>
     api.get(`${BASE}/tasks/${id}/attachments`).then(unwrap<ApiAttachment[]>),
+  uploadAttachment: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`${BASE}/tasks/${id}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(unwrap<ApiAttachment>);
+  },
   deleteAttachment: (id: string, attachmentId: string) =>
     api.delete(`${BASE}/tasks/${id}/attachments/${attachmentId}`),
 };

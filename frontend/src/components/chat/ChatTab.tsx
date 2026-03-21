@@ -76,16 +76,24 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Tracks real IDs of messages we sent so socket echo is ignored
   const sentIdsRef = useRef<Set<string>>(new Set());
+  const messagesRef = useRef<LocalMessage[]>([]);
+  // Track processed message IDs to prevent duplicates from socket
+  const processedIdsRef = useRef<Set<string>>(new Set());
+
+  // Keep messages ref in sync
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   const dedupeById = (items: LocalMessage[]) => {
     const seen = new Set<string>();
     const out: LocalMessage[] = [];
-    for (let i = items.length - 1; i >= 0; i--) {
-      const m = items[i];
+    for (const m of items) {
       if (seen.has(m.id)) continue;
       seen.add(m.id);
       out.push(m);
     }
-    return out.reverse();
+    return out;
   };
 
   const me = {
@@ -132,12 +140,22 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
         s.on(SOCKET_EVENTS.COMMENT_CREATED, (data: { comment: ApiComment }) => {
           if (!isMounted) return;
           const msg = apiCommentToMessage(data.comment);
+          
+          // Skip if we've already processed this message ID
+          if (processedIdsRef.current.has(msg.id)) return;
+          processedIdsRef.current.add(msg.id);
+          
           // Skip our own optimistically-added messages
           if (sentIdsRef.current.has(msg.id)) {
             sentIdsRef.current.delete(msg.id);
             return;
           }
-          setMessages((prev) => dedupeById([...prev, msg]));
+          
+          // Add new message only if it doesn't exist
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
         });
 
         s.on(SOCKET_EVENTS.COMMENT_DELETED, (data: { commentId: string }) => {
