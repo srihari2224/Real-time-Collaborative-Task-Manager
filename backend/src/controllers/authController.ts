@@ -12,3 +12,12 @@ export const getMe = async (req: FastifyRequest, reply: FastifyReply) => {
   const user = await authService.getMe(req.user!.id);
   return apiResponse.success(reply, user);
 };
+
+export const updateProfile = async (req: FastifyRequest, reply: FastifyReply) => {
+  const body = (req.body ?? {}) as { full_name?: string | null; avatar_url?: string | null };
+  const user = await authService.updateProfile(req.user!.id, {
+    full_name: body.full_name,
+    avatar_url: body.avatar_url,
+  });
+  return apiResponse.success(reply, user, 'Profile updated');
+};

@@ -52,7 +52,7 @@ function CallbackContent() {
       try {
         const wsRes = await api.get('/api/v1/workspaces');
         const workspaces = wsRes.data?.data ?? wsRes.data ?? [];
-        router.replace(workspaces.length > 0 ? `/workspace/${workspaces[0].id}` : '/onboarding');
+        router.replace(workspaces.length > 0 ? '/my-tasks' : '/onboarding');
       } catch {
         // Backend unreachable — go to onboarding, not /auth
         router.replace('/onboarding');

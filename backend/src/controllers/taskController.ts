@@ -55,11 +55,12 @@ export const listTasks = async (req: FastifyRequest, reply: FastifyReply) => {
   const { projectId } = req.params as { projectId: string };
   const q = req.query as any;
 
-  // Determine visibility: owners/admins see all, members see only their assigned tasks
-  const isOwnerOrAdmin = await taskService.isOwnerOrAdminOfProject(projectId, req.user!.id);
-  const assignee_user_id = isOwnerOrAdmin ? undefined : req.user!.id;
+  const allowed = await taskService.isMemberOfProjectWorkspace(projectId, req.user!.id);
+  if (!allowed) {
+    return reply.code(403).send({ success: false, message: 'Not a member of this workspace' });
+  }
 
-  const { tasks, pagination } = await taskService.listTasks(projectId, { ...q, assignee_user_id });
+  const { tasks, pagination } = await taskService.listTasks(projectId, { ...q });
   return apiResponse.paginated(reply, tasks, pagination);
 };
 

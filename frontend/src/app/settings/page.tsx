@@ -1,21 +1,26 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, CSSProperties } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { WorkspaceRole } from '@/types';
-import { Trash2, UserPlus, Shield, AlertTriangle, Mail, Loader2, User, Moon, Sun } from 'lucide-react';
+import {
+  Trash2, UserPlus, Shield, AlertTriangle, Mail,
+  Loader2, User, Settings, X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { workspacesApi, type ApiWorkspace, type ApiWorkspaceMember } from '@/lib/apiClient';
-import { useUIStore } from '@/stores/uiStore';
-import Link from 'next/link';
+import { ProfileEditModal } from '@/components/profile/ProfileEditModal';
 
 const ROLES: WorkspaceRole[] = ['owner', 'admin', 'member', 'guest'];
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
-  owner: 'Owner',
-  admin: 'Admin',
-  member: 'Member',
-  guest: 'Guest',
+  owner: 'Owner', admin: 'Admin', member: 'Member', guest: 'Guest',
+};
+const ROLE_COLORS: Record<WorkspaceRole, { color: string; bg: string }> = {
+  owner: { color: '#d97706', bg: 'rgba(217,119,6,0.10)' },
+  admin: { color: '#7c3aed', bg: 'rgba(124,58,237,0.10)' },
+  member: { color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  guest: { color: '#64748b', bg: 'rgba(100,116,139,0.10)' },
 };
 
 export default function SettingsPage() {
@@ -29,13 +34,12 @@ export default function SettingsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const { theme, toggleTheme } = useUIStore();
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
 
-  // Load workspace + members — auto-discover workspace since /settings has no URL param
+  /* ── Data ── */
   useEffect(() => {
     const load = async () => {
       try {
-        // Find the first workspace the user belongs to
         const workspaces = await workspacesApi.list();
         if (!workspaces.length) { setLoading(false); return; }
         const wsId = workspaces[0].id;
@@ -62,12 +66,8 @@ export default function SettingsPage() {
     try {
       const updated = await workspacesApi.update(workspaceId, { name: workspaceName.trim() });
       setWorkspace(updated);
-      toast.success('Workspace settings saved');
-    } catch {
-      toast.error('Failed to save settings');
-    } finally {
-      setSaving(false);
-    }
+      toast.success('Settings saved');
+    } catch { toast.error('Failed to save'); } finally { setSaving(false); }
   };
 
   const handleInvite = async () => {
@@ -76,13 +76,11 @@ export default function SettingsPage() {
     try {
       const newMember = await workspacesApi.inviteMember(workspaceId, { email: inviteEmail.trim(), role: inviteRole });
       setMembers((prev) => [...prev, newMember]);
-      toast.success(`Invitation sent to ${inviteEmail}`, { icon: '📧' });
+      toast.success(`Invitation sent to ${inviteEmail}`);
       setInviteEmail('');
     } catch (err: any) {
       toast.error(err?.response?.data?.message ?? 'Invitation failed');
-    } finally {
-      setInviting(false);
-    }
+    } finally { setInviting(false); }
   };
 
   const handleRemoveMember = async (member: ApiWorkspaceMember) => {
@@ -91,223 +89,569 @@ export default function SettingsPage() {
     try {
       await workspacesApi.removeMember(workspaceId, member.user_id);
       setMembers((prev) => prev.filter((m) => m.user_id !== member.user_id));
-      toast.success(`${member.user?.full_name || member.user?.email} removed from workspace`);
-    } catch {
-      toast.error('Failed to remove member');
-    }
+      toast.success(`${member.user?.full_name || member.user?.email} removed`);
+    } catch { toast.error('Failed to remove member'); }
   };
 
   const handleDeleteWorkspace = () => {
-    toast.error('Workspace deletion requires server confirmation. Please check your email.', { duration: 5000 });
+    toast.error('Workspace deletion requires email confirmation.', { duration: 5000 });
     setShowDeleteConfirm(false);
   };
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+  /* ── Loading ── */
+  if (loading) return (
+    <>
+      <style>{CSS}</style>
+      <div className="st-root">
         <TopBar title="Settings" />
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--text-muted)' }}>
-          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Loading settings...
-          <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <div className="st-loader">
+          <Loader2 size={20} className="st-spin" />
+          <span>Loading settings…</span>
         </div>
       </div>
-    );
-  }
+    </>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <TopBar title="Workspace Settings" />
+    <>
+      <style>{CSS}</style>
+      <div className="st-root">
 
-      <div className="page-content scroll-y" style={{ maxWidth: 700 }}>
-        {/* General */}
-        <section style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> General
-          </h2>
+        <TopBar title="Workspace Settings" />
 
-          {/* Profile shortcut */}
-          <Link href="/profile" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius)', marginBottom: 14, textDecoration: 'none', background: 'var(--bg-elevated)', transition: 'all var(--transition)' }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
-          >
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}><User size={16} /></div>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Edit Profile & Avatar</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Change your name, photo, or choose an avatar</div>
-            </div>
-            <svg style={{ marginLeft: 'auto', color: 'var(--text-muted)' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </Link>
+        <div className="st-body">
+          <div className="st-content">
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div className="form-field">
-              <label className="form-label">Workspace Name</label>
-              <input
-                className="input"
-                value={workspaceName}
-                onChange={(e) => setWorkspaceName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSaveGeneral()}
-                style={{ maxWidth: 400 }}
-              />
-            </div>
-
-            {/* Appearance */}
-            <div className="form-field">
-              <label className="form-label">Appearance</label>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button
-                  onClick={() => theme !== 'light' && toggleTheme()}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius)', border: `2px solid ${theme === 'light' ? 'var(--accent)' : 'var(--border-default)'}`, background: theme === 'light' ? 'var(--accent-soft)' : 'var(--bg-elevated)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: theme === 'light' ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all var(--transition)', fontFamily: 'var(--font-display)' }}
-                >
-                  <Sun size={14} /> Light
-                </button>
-                <button
-                  onClick={() => theme !== 'dark' && toggleTheme()}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius)', border: `2px solid ${theme === 'dark' ? 'var(--accent)' : 'var(--border-default)'}`, background: theme === 'dark' ? 'var(--accent-soft)' : 'var(--bg-elevated)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: theme === 'dark' ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all var(--transition)', fontFamily: 'var(--font-display)' }}
-                >
-                  <Moon size={14} /> Dark
-                </button>
+            {/* ── Section: General ── */}
+            <section className="st-section">
+              <div className="st-section-header">
+                <Settings size={14} style={{ color: 'var(--st-accent)' } as CSSProperties} />
+                <span>General</span>
               </div>
-            </div>
 
-            <div>
-              <button onClick={handleSaveGeneral} disabled={saving} className="btn btn-primary" style={{ fontSize: 12.5 }}>
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Members */}
-        <section style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Shield size={14} style={{ color: '#6366f1' }} /> Members ({members.length})
-          </h2>
-
-          {/* Invite */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <Mail size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-              <input
-                className="input"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="colleague@company.com"
-                style={{ paddingLeft: 32 }}
-                onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
-              />
-            </div>
-            <select
-              className="input"
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
-              style={{ width: 110 }}
-            >
-              {(['admin', 'member', 'guest'] as WorkspaceRole[]).map((r) => (
-                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-              ))}
-            </select>
-            <button onClick={handleInvite} disabled={inviting || !inviteEmail.trim()} className="btn btn-primary" style={{ flexShrink: 0, fontSize: 12.5 }}>
-              <UserPlus size={13} /> {inviting ? 'Inviting...' : 'Invite'}
-            </button>
-          </div>
-
-          {/* Members Table */}
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 16, padding: '8px 16px', borderBottom: '1px solid var(--border-subtle)', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <span>Member</span><span>Role</span><span></span>
-            </div>
-            {members.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>No members yet</div>
-            ) : members.map((member, i) => {
-              const name = member.user?.full_name || member.user?.email || 'Unknown';
-              const initial = name[0]?.toUpperCase() ?? '?';
-              return (
-                <div key={member.user_id} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto auto',
-                  gap: 16,
-                  alignItems: 'center',
-                  padding: '12px 16px',
-                  borderBottom: i < members.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                  transition: 'background var(--transition)',
-                }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="avatar" style={{ width: 32, height: 32, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, flexShrink: 0 }}>
-                      {member.user?.avatar_url
-                        ? <img src={member.user.avatar_url} alt={initial} style={{ width: 32, height: 32, borderRadius: '50%' }} />
-                        : initial}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {name}
-                        {member.role === 'owner' && <span style={{ fontSize: 10.5, color: 'var(--accent)', fontWeight: 700, background: 'var(--accent-soft)', padding: '1px 6px', borderRadius: 99, marginLeft: 6 }}>Owner</span>}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{member.user?.email}</div>
-                    </div>
-                  </div>
-
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', textTransform: 'capitalize' }}>
-                    {ROLE_LABELS[member.role] ?? member.role}
-                  </span>
-
-                  <button
-                    onClick={() => handleRemoveMember(member)}
-                    disabled={member.role === 'owner'}
-                    style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)', background: 'transparent', border: 'none', cursor: member.role === 'owner' ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', opacity: member.role === 'owner' ? 0.3 : 1, transition: 'all var(--transition)' }}
-                    onMouseEnter={(e) => member.role !== 'owner' && (e.currentTarget.style.color = '#ef4444', e.currentTarget.style.background = 'rgba(239,68,68,0.1)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)', e.currentTarget.style.background = 'transparent')}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+              {/* Profile shortcut */}
+              <button type="button" className="st-profile-link" onClick={() => setProfileModalOpen(true)}>
+                <div className="st-profile-icon"><User size={16} /></div>
+                <div className="st-profile-text">
+                  <span className="st-profile-title">Edit Profile &amp; Avatar</span>
+                  <span className="st-profile-sub">Change your name, photo, or choose an avatar</span>
                 </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Danger Zone */}
-        <section>
-          <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <AlertTriangle size={14} /> Danger Zone
-          </h2>
-          <div style={{ padding: '16px', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 'var(--radius)', background: 'rgba(239,68,68,0.04)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>Delete this workspace</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Once deleted, all data including projects, tasks, and chat history will be permanently removed.</div>
-              </div>
-              <button
-                className="btn btn-danger"
-                style={{ flexShrink: 0, fontSize: 12.5 }}
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                <Trash2 size={12} /> Delete Workspace
               </button>
-            </div>
-          </div>
 
-          {showDeleteConfirm && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              style={{ marginTop: 12, padding: '16px', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 'var(--radius)', background: 'rgba(239,68,68,0.07)' }}
-            >
-              <p style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 12, fontWeight: 500 }}>
-                Are you sure you want to permanently delete <strong>{workspace?.name}</strong>? This cannot be undone.
-              </p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-danger" onClick={handleDeleteWorkspace} style={{ fontSize: 12.5 }}>Yes, Delete Forever</button>
-                <button className="btn btn-ghost" onClick={() => setShowDeleteConfirm(false)} style={{ fontSize: 12.5 }}>Cancel</button>
+              <div className="st-fields">
+                {/* Workspace name */}
+                <div className="st-field">
+                  <label className="st-label" htmlFor="ws-name-input">Workspace Name</label>
+                  <input
+                    id="ws-name-input"
+                    className="st-input"
+                    value={workspaceName}
+                    onChange={(e) => setWorkspaceName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveGeneral()}
+                    placeholder="My Workspace"
+                    maxLength={80}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="st-save-btn"
+                  onClick={handleSaveGeneral}
+                  disabled={saving}
+                >
+                  {saving ? <><span className="st-spin-sm" />Saving…</> : 'Save Changes'}
+                </button>
               </div>
-            </motion.div>
-          )}
-        </section>
-      </div>
+            </section>
 
-      <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+            {/* ── Section: Members ── */}
+            <section className="st-section">
+              <div className="st-section-header">
+                <Shield size={14} style={{ color: '#7c3aed' } as CSSProperties} />
+                <span>Members <span className="st-badge-count">{members.length}</span></span>
+              </div>
+
+              {/* Invite row */}
+              <div className="st-invite-row">
+                <div className="st-input-wrap">
+                  <Mail size={14} className="st-input-icon" />
+                  <input
+                    className="st-input has-icon"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="colleague@company.com"
+                    type="email"
+                    onKeyDown={(e) => e.key === 'Enter' && handleInvite()}
+                  />
+                </div>
+                <select
+                  className="st-select"
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value as WorkspaceRole)}
+                >
+                  {(['admin', 'member', 'guest'] as WorkspaceRole[]).map((r) => (
+                    <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="st-invite-btn"
+                  onClick={handleInvite}
+                  disabled={inviting || !inviteEmail.trim()}
+                >
+                  {inviting
+                    ? <Loader2 size={14} className="st-spin" />
+                    : <><UserPlus size={13} />Invite</>
+                  }
+                </button>
+              </div>
+
+              {/* Members table */}
+              <div className="st-members-table">
+                <div className="st-table-header">
+                  <span>Member</span>
+                  <span>Role</span>
+                  <span></span>
+                </div>
+                {members.length === 0 ? (
+                  <div className="st-table-empty">No members yet</div>
+                ) : members.map((m, i) => {
+                  const name = m.user?.full_name || m.user?.email || 'Unknown';
+                  const initial = name[0]?.toUpperCase() ?? '?';
+                  const roleStyle = ROLE_COLORS[m.role] ?? ROLE_COLORS.member;
+                  return (
+                    <div key={m.user_id} className={`st-member-row${i === members.length - 1 ? ' last' : ''}`}>
+                      <div className="st-member-info">
+                        <div className="st-avatar">
+                          {m.user?.avatar_url
+                            ? <img src={m.user.avatar_url} alt={initial} />
+                            : initial}
+                        </div>
+                        <div className="st-member-text">
+                          <span className="st-member-name">{name}</span>
+                          <span className="st-member-email">{m.user?.email}</span>
+                        </div>
+                      </div>
+                      <span
+                        className="st-role-badge"
+                        style={{ color: roleStyle.color, background: roleStyle.bg } as CSSProperties}
+                      >
+                        {ROLE_LABELS[m.role] ?? m.role}
+                      </span>
+                      <button
+                        type="button"
+                        className="st-remove-btn"
+                        onClick={() => handleRemoveMember(m)}
+                        disabled={m.role === 'owner'}
+                        title={m.role === 'owner' ? 'Cannot remove owner' : 'Remove member'}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* ── Section: Danger Zone ── */}
+            <section className="st-section danger">
+              <div className="st-section-header danger-header">
+                <AlertTriangle size={14} />
+                <span>Danger Zone</span>
+              </div>
+
+              <div className="st-danger-box">
+                <div className="st-danger-text">
+                  <span className="st-danger-title">Delete this workspace</span>
+                  <span className="st-danger-desc">
+                    Once deleted, all data including projects, tasks, and chat history will be permanently removed.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="st-delete-btn"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <Trash2 size={12} /> Delete Workspace
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showDeleteConfirm && (
+                  <motion.div
+                    className="st-confirm-box"
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <button
+                      type="button"
+                      className="st-confirm-close"
+                      onClick={() => setShowDeleteConfirm(false)}
+                    >
+                      <X size={14} />
+                    </button>
+                    <p className="st-confirm-text">
+                      Are you sure you want to permanently delete{' '}
+                      <strong>{workspace?.name}</strong>? This cannot be undone.
+                    </p>
+                    <div className="st-confirm-actions">
+                      <button type="button" className="st-delete-btn" onClick={handleDeleteWorkspace}>
+                        Yes, Delete Forever
+                      </button>
+                      <button type="button" className="st-cancel-btn" onClick={() => setShowDeleteConfirm(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+
+          </div>
+        </div>
+
+        <ProfileEditModal open={profileModalOpen} onClose={() => setProfileModalOpen(false)} />
+      </div>
+    </>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.st-root {
+  --st-font:    'Plus Jakarta Sans','Inter',sans-serif;
+  --st-bg:      #f0f4f8;
+  --st-surface: #ffffff;
+  --st-elev:    #f7f9fc;
+  --st-overlay: #eef2f7;
+  --st-txt:     #0f172a;
+  --st-txt2:    #475569;
+  --st-muted:   #94a3b8;
+  --st-border:  rgba(15,23,42,0.08);
+  --st-border2: rgba(15,23,42,0.14);
+  --st-border3: rgba(15,23,42,0.24);
+  --st-accent:  #2563eb;
+  --st-acc-soft:rgba(37,99,235,0.10);
+  --st-radius:  10px;
+  --st-radius-sm:6px;
+  --st-shadow:  0 1px 4px rgba(15,23,42,0.10);
+  --st-shadow-md:0 4px 16px rgba(15,23,42,0.10);
+  --st-glow:    0 0 0 3px rgba(37,99,235,0.18);
+  --st-t:       150ms cubic-bezier(.4,0,.2,1);
+
+  display: flex; flex-direction: column;
+  height: 100%; font-family: var(--st-font);
+  background: var(--st-bg); color: var(--st-txt);
+  position: relative;
+}
+html.dark .st-root {
+  --st-bg:      #0b1120;
+  --st-surface: #111827;
+  --st-elev:    #1c2333;
+  --st-overlay: #243049;
+  --st-txt:     #f1f5f9;
+  --st-txt2:    #94a3b8;
+  --st-muted:   #64748b;
+  --st-border:  rgba(255,255,255,0.06);
+  --st-border2: rgba(255,255,255,0.12);
+  --st-border3: rgba(255,255,255,0.22);
+  --st-accent:  #3b82f6;
+  --st-acc-soft:rgba(59,130,246,0.12);
+  --st-shadow:  0 1px 4px rgba(0,0,0,0.40);
+  --st-shadow-md:0 4px 16px rgba(0,0,0,0.36);
+  --st-glow:    0 0 0 3px rgba(59,130,246,0.25);
+}
+
+/* Loader */
+.st-loader {
+  flex: 1; display: flex; align-items: center;
+  justify-content: center; gap: 10px;
+  font-size: 14px; color: var(--st-muted); font-family: var(--st-font);
+}
+.st-spin { animation: st-spin 1s linear infinite; }
+@keyframes st-spin { to { transform: rotate(360deg); } }
+
+/* Body */
+.st-body {
+  flex: 1; overflow-y: auto;
+  padding: 28px 24px;
+  background: var(--st-bg);
+}
+.st-content { max-width: 680px; display: flex; flex-direction: column; gap: 24px; }
+
+/* Section */
+.st-section {
+  background: var(--st-surface);
+  border: 1px solid var(--st-border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--st-shadow);
+}
+.st-section-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--st-border);
+  font-size: 13px; font-weight: 700;
+  color: var(--st-txt); letter-spacing: -0.01em;
+  background: var(--st-elev);
+}
+.st-section.danger .st-section-header {
+  color: #dc2626; background: rgba(220,38,38,0.04);
+  border-color: rgba(220,38,38,0.15);
+}
+.st-badge-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px;
+  padding: 0 6px;
+  background: var(--st-acc-soft); color: var(--st-accent);
+  border-radius: 99px; font-size: 11px; font-weight: 700;
+}
+
+/* Profile link */
+.st-profile-link {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px;
+  border: none;
+  border-bottom: 1px solid var(--st-border);
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  background: transparent;
+  transition: background var(--st-t);
+}
+.st-profile-link:hover { background: var(--st-elev); }
+.st-profile-icon {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--st-acc-soft); color: var(--st-accent);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.st-profile-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.st-profile-title { font-size: 13.5px; font-weight: 600; color: var(--st-txt); }
+.st-profile-sub   { font-size: 12px; color: var(--st-muted); }
+.st-profile-arrow { color: var(--st-muted); flex-shrink: 0; }
+
+/* Fields */
+.st-fields {
+  display: flex; flex-direction: column; gap: 18px;
+  padding: 20px;
+}
+.st-field { display: flex; flex-direction: column; gap: 6px; }
+.st-label {
+  font-size: 11.5px; font-weight: 700;
+  color: var(--st-txt2); text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+/* Input */
+.st-input {
+  background: var(--st-elev);
+  border: 1.5px solid var(--st-border2);
+  border-radius: var(--st-radius-sm);
+  color: var(--st-txt);
+  font-family: var(--st-font);
+  font-size: 14px; font-weight: 500;
+  padding: 11px 13px;
+  outline: none; width: 100%;
+  transition: border-color var(--st-t), box-shadow var(--st-t);
+  max-width: 420px;
+  -webkit-appearance: none;
+}
+.st-input::placeholder { color: var(--st-muted); font-weight: 400; }
+.st-input:focus { border-color: var(--st-accent); box-shadow: var(--st-glow); background: var(--st-surface); }
+.st-input:hover:not(:focus) { border-color: var(--st-border3); }
+.st-input.has-icon { padding-left: 38px; }
+
+/* Input wrap */
+.st-input-wrap { position: relative; display: flex; align-items: center; flex: 1; }
+.st-input-icon { position: absolute; left: 12px; color: var(--st-muted); pointer-events: none; }
+.st-input-wrap .st-input { max-width: 100%; }
+
+/* Select */
+.st-select {
+  background: var(--st-elev);
+  border: 1.5px solid var(--st-border2);
+  border-radius: var(--st-radius-sm);
+  color: var(--st-txt);
+  font-family: var(--st-font);
+  font-size: 13px; font-weight: 500;
+  padding: 11px 28px 11px 12px;
+  outline: none; cursor: pointer;
+  transition: border-color var(--st-t);
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  width: 120px; flex-shrink: 0;
+}
+.st-select:focus { border-color: var(--st-accent); box-shadow: var(--st-glow); }
+
+/* Save btn */
+.st-save-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 20px;
+  background: var(--st-accent); color: white;
+  border: none; border-radius: var(--st-radius-sm);
+  font-size: 13.5px; font-weight: 700;
+  font-family: var(--st-font); cursor: pointer;
+  transition: all var(--st-t); align-self: flex-start;
+}
+.st-save-btn:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 3px 12px rgba(37,99,235,0.32); transform: translateY(-1px); }
+.st-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.st-spin-sm {
+  width: 13px; height: 13px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white; border-radius: 50%;
+  animation: st-spin 0.65s linear infinite;
+}
+
+/* Invite row */
+.st-invite-row {
+  display: flex; gap: 8px; padding: 16px 20px;
+  border-bottom: 1px solid var(--st-border);
+  flex-wrap: wrap;
+}
+.st-invite-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 10px 16px;
+  background: var(--st-accent); color: white;
+  border: none; border-radius: var(--st-radius-sm);
+  font-size: 13px; font-weight: 700;
+  font-family: var(--st-font); cursor: pointer;
+  transition: all var(--st-t); white-space: nowrap; flex-shrink: 0;
+}
+.st-invite-btn:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
+.st-invite-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Members table */
+.st-members-table { display: flex; flex-direction: column; }
+.st-table-header {
+  display: grid; grid-template-columns: 1fr 100px 40px;
+  gap: 12px; padding: 10px 20px;
+  font-size: 10.5px; font-weight: 700;
+  color: var(--st-muted); text-transform: uppercase; letter-spacing: 0.07em;
+  background: var(--st-elev);
+  border-bottom: 1px solid var(--st-border);
+}
+.st-table-empty {
+  padding: 28px; text-align: center;
+  font-size: 13.5px; color: var(--st-muted);
+}
+.st-member-row {
+  display: grid; grid-template-columns: 1fr 100px 40px;
+  gap: 12px; align-items: center;
+  padding: 13px 20px;
+  border-bottom: 1px solid var(--st-border);
+  transition: background var(--st-t);
+}
+.st-member-row.last { border-bottom: none; }
+.st-member-row:hover { background: var(--st-elev); }
+
+.st-member-info { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.st-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--st-acc-soft); color: var(--st-accent);
+  font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden;
+}
+.st-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.st-member-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-member-name {
+  font-size: 13.5px; font-weight: 600; color: var(--st-txt);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.st-member-email {
+  font-size: 11.5px; color: var(--st-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.st-role-badge {
+  display: inline-flex; align-items: center;
+  padding: 3px 10px; border-radius: 99px;
+  font-size: 11px; font-weight: 700;
+  white-space: nowrap;
+}
+.st-remove-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--st-radius-sm);
+  background: transparent; border: none;
+  color: var(--st-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--st-t);
+}
+.st-remove-btn:hover:not(:disabled) { background: rgba(220,38,38,0.10); color: #dc2626; }
+.st-remove-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Danger section */
+.st-danger-box {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(220,38,38,0.12);
+  flex-wrap: wrap;
+}
+.st-danger-text { display: flex; flex-direction: column; gap: 4px; }
+.st-danger-title { font-size: 13.5px; font-weight: 600; color: var(--st-txt); }
+.st-danger-desc  { font-size: 12.5px; color: var(--st-muted); line-height: 1.5; max-width: 380px; }
+.st-delete-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px;
+  background: rgba(220,38,38,0.08); color: #dc2626;
+  border: 1px solid rgba(220,38,38,0.28);
+  border-radius: var(--st-radius-sm);
+  font-size: 13px; font-weight: 700;
+  font-family: var(--st-font); cursor: pointer;
+  transition: all var(--st-t); white-space: nowrap; flex-shrink: 0;
+}
+.st-delete-btn:hover { background: rgba(220,38,38,0.15); border-color: rgba(220,38,38,0.45); }
+
+.st-confirm-box {
+  margin: 0; padding: 20px;
+  background: rgba(220,38,38,0.05);
+  border-top: 1px solid rgba(220,38,38,0.15);
+  position: relative;
+}
+.st-confirm-close {
+  position: absolute; top: 14px; right: 14px;
+  background: transparent; border: none;
+  color: var(--st-muted); cursor: pointer;
+  display: flex;
+}
+.st-confirm-text {
+  font-size: 13.5px; color: var(--st-txt);
+  line-height: 1.55; margin-bottom: 16px;
+}
+.st-confirm-text strong { color: #dc2626; }
+.st-confirm-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.st-cancel-btn {
+  display: inline-flex; align-items: center;
+  padding: 9px 16px;
+  background: var(--st-elev);
+  border: 1px solid var(--st-border2);
+  border-radius: var(--st-radius-sm);
+  font-size: 13px; font-weight: 600;
+  color: var(--st-txt2);
+  font-family: var(--st-font); cursor: pointer;
+  transition: all var(--st-t);
+}
+.st-cancel-btn:hover { background: var(--st-overlay); border-color: var(--st-border3); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .st-body { padding: 16px 12px; }
+  .st-invite-row { gap: 8px; }
+  .st-select { width: 100px; }
+  .st-table-header,
+  .st-member-row { grid-template-columns: 1fr 80px 36px; padding: 11px 14px; }
+  .st-fields { padding: 16px 14px; }
+  .st-section-header { padding: 13px 14px; }
+  .st-profile-link { padding: 12px 14px; }
+  .st-input { max-width: 100%; font-size: 16px; }
+  .st-danger-box { flex-direction: column; }
+}
+`;

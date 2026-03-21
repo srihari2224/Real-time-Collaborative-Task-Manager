@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 import { useEffect } from 'react';
 import { useUIStore } from '@/stores/uiStore';
-import { GlobalSearch } from '@/components/layout/GlobalSearch';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,23 +15,16 @@ function ThemeApplier({ children }: { children: React.ReactNode }) {
   const theme = useUIStore((s) => s.theme);
 
   useEffect(() => {
+    const saved = localStorage.getItem('tf-theme') as 'light' | 'dark' | null;
+    if (saved === 'dark' || saved === 'light') {
+      useUIStore.setState({ theme: saved });
+    }
+  }, []);
+
+  useEffect(() => {
     document.documentElement.classList.remove('dark', 'light');
     document.documentElement.classList.add(theme);
   }, [theme]);
-
-  useEffect(() => {
-    const handleKeydown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        useUIStore.getState().setSearchOpen(true);
-      }
-      if (e.key === 'Escape') {
-        useUIStore.getState().setSearchOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
-  }, []);
 
   return <>{children}</>;
 }
@@ -42,7 +34,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeApplier>
         {children}
-        <GlobalSearch />
         <Toaster
           position="top-right"
           toastOptions={{
@@ -54,6 +45,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
               borderRadius: 'var(--radius)',
               fontFamily: 'var(--font-display)',
               fontSize: '13px',
+              fontWeight: 500,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.1), 0 0 0 1px rgba(37,99,235,0.06)',
+              letterSpacing: '-0.01em',
+            },
+            success: {
+              iconTheme: {
+                primary: '#22c55e',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
             },
           }}
         />

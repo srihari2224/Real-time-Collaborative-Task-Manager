@@ -19,6 +19,7 @@ interface UIStore {
   setActivePanelTab: (tab: 'overview' | 'chat' | 'attachments' | 'activity') => void;
   setActiveView: (view: ViewType) => void;
   toggleTheme: () => void;
+  setTheme: (t: 'dark' | 'light') => void;
   setOfflineBanner: (v: boolean) => void;
 }
 
@@ -40,6 +41,15 @@ export const useUIStore = create<UIStore>((set) => ({
   closeTaskPanel: () => set({ taskPanelOpen: false, activePanelTaskId: null }),
   setActivePanelTab: (tab) => set({ activePanelTab: tab }),
   setActiveView: (view) => set({ activeView: view }),
-  toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
+  toggleTheme: () =>
+    set((s) => {
+      const next = s.theme === 'dark' ? 'light' : 'dark';
+      if (typeof window !== 'undefined') localStorage.setItem('tf-theme', next);
+      return { theme: next };
+    }),
+  setTheme: (t) => {
+    if (typeof window !== 'undefined') localStorage.setItem('tf-theme', t);
+    set({ theme: t });
+  },
   setOfflineBanner: (v) => set({ offlineBanner: v }),
 }));

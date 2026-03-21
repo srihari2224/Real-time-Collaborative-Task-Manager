@@ -17,48 +17,25 @@ export function KanbanColumn({ section, tasks, onAddTask }: KanbanColumnProps) {
 
   return (
     <div
-      className="kanban-column"
-      style={{ borderColor: isOver ? 'var(--accent)' : 'var(--border-subtle)', transition: 'border-color 150ms ease' }}
+      className={`kanban-column ${isOver ? 'is-over' : ''}`}
+      style={{ transition: 'border-color 150ms ease, background 150ms ease' }}
     >
       {/* Header */}
       <div className="kanban-column-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{section.name}</span>
-          <span style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: 'var(--text-muted)',
-            background: 'var(--bg-elevated)',
-            borderRadius: 99,
-            padding: '1px 7px',
-            border: '1px solid var(--border-subtle)',
-          }}>
-            {tasks.length}
-          </span>
+        <div className="kanban-column-title-row">
+          <span className="kanban-column-name">{section.name}</span>
+          <span className="kanban-column-count">{tasks.length}</span>
         </div>
-        <button
-          style={{ width: 24, height: 24, borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', transition: 'all var(--transition)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-        >
+        <button className="kanban-menu-btn">
           <MoreHorizontal size={14} />
         </button>
       </div>
 
-      {/* Task List */}
+      {/* Task list */}
       <div ref={setNodeRef} className="kanban-column-body">
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           {tasks.length === 0 ? (
-            <div style={{
-              border: '2px dashed var(--border-subtle)',
-              borderRadius: 'var(--radius)',
-              padding: '20px',
-              textAlign: 'center',
-              fontSize: 12,
-              color: 'var(--text-muted)',
-              transition: 'border-color 150ms',
-              ...(isOver ? { borderColor: 'var(--accent)', background: 'var(--accent-soft)' } : {}),
-            }}>
+            <div className={`kanban-empty-drop ${isOver ? 'over' : ''}`}>
               Drop tasks here
             </div>
           ) : (
@@ -67,33 +44,141 @@ export function KanbanColumn({ section, tasks, onAddTask }: KanbanColumnProps) {
         </SortableContext>
       </div>
 
-      {/* Add Task Button */}
-      <div style={{ padding: '8px 10px', flexShrink: 0, borderTop: '1px solid var(--border-subtle)' }}>
-        <button
-          onClick={onAddTask}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            width: '100%',
-            padding: '6px 8px',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            fontSize: 12.5,
-            fontFamily: 'var(--font-display)',
-            fontWeight: 500,
-            transition: 'all var(--transition)',
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-        >
+      {/* Add task */}
+      <div className="kanban-column-footer">
+        <button className="kanban-add-task-btn" onClick={onAddTask}>
           <Plus size={13} />
           Add task
         </button>
       </div>
+
+      <style jsx>{`
+        .kanban-column {
+          background: var(--bg-elevated);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-lg);
+          display: flex;
+          flex-direction: column;
+          width: 272px;
+          min-width: 272px;
+          max-height: calc(100vh - 120px);
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+        .kanban-column.is-over {
+          border-color: var(--accent);
+          background: rgba(37,99,235,0.03);
+        }
+
+        .kanban-column-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 14px 10px;
+          flex-shrink: 0;
+          border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .kanban-column-title-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .kanban-column-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--text-primary);
+          letter-spacing: -0.01em;
+        }
+
+        .kanban-column-count {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--text-muted);
+          background: var(--bg-overlay);
+          border-radius: 99px;
+          padding: 1px 8px;
+          border: 1px solid var(--border-subtle);
+          font-variant-numeric: tabular-nums;
+        }
+
+        .kanban-menu-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: var(--radius-sm);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: transparent;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          transition: all var(--transition);
+          opacity: 0;
+        }
+        .kanban-column-header:hover .kanban-menu-btn { opacity: 1; }
+        .kanban-menu-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+
+        .kanban-column-body {
+          flex: 1;
+          overflow-y: auto;
+          padding: 10px 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+        .kanban-column-body::-webkit-scrollbar { width: 4px; }
+        .kanban-column-body::-webkit-scrollbar-track { background: transparent; }
+        .kanban-column-body::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 99px; }
+
+        .kanban-empty-drop {
+          border: 2px dashed var(--border-subtle);
+          border-radius: var(--radius);
+          padding: 20px 16px;
+          text-align: center;
+          font-size: 12px;
+          color: var(--text-muted);
+          transition: all 150ms ease;
+          font-weight: 500;
+        }
+        .kanban-empty-drop.over {
+          border-color: var(--accent);
+          background: rgba(37,99,235,0.05);
+          color: var(--accent);
+        }
+
+        .kanban-column-footer {
+          padding: 8px 10px 10px;
+          flex-shrink: 0;
+          border-top: 1px solid var(--border-subtle);
+        }
+
+        .kanban-add-task-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          width: 100%;
+          padding: 6px 8px;
+          background: transparent;
+          border: none;
+          border-radius: var(--radius-sm);
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 12.5px;
+          font-family: var(--font-display);
+          font-weight: 600;
+          transition: all var(--transition);
+          letter-spacing: -0.01em;
+        }
+        .kanban-add-task-btn:hover {
+          background: var(--bg-hover);
+          color: var(--accent);
+        }
+      `}</style>
     </div>
   );
 }

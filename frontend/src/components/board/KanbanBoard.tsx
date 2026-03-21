@@ -47,7 +47,6 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
     const activeTask = tasks.find((t) => t.id === active.id);
     if (!activeTask) return;
 
-    // Dropped over a column (section)
     const overSection = sections.find((s) => s.id === over.id);
     if (overSection && activeTask.section_id !== overSection.id) {
       setTasks((prev) =>
@@ -55,7 +54,6 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
       );
     }
 
-    // Dropped over another task
     const overTask = tasks.find((t) => t.id === over.id);
     if (overTask && overTask.id !== activeTask.id) {
       if (activeTask.section_id !== overTask.section_id) {
@@ -88,7 +86,6 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
       });
     }
 
-    // Emit: task:moved via socket
     const movedTask = tasks.find((t) => t.id === active.id);
     const toSection = sections.find((s) => s.id === movedTask?.section_id);
     if (toSection) {
@@ -98,10 +95,6 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
       }
     }
   }, [tasks, sections, onStatusChange]);
-
-  const handleAddTask = (sectionId: string) => {
-    toast('Click + Add task to create a new task', { icon: '📝' });
-  };
 
   return (
     <DndContext
@@ -117,34 +110,12 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
             key={section.id}
             section={section}
             tasks={getTasksForSection(section.id)}
-            onAddTask={() => handleAddTask(section.id)}
+            onAddTask={() => toast('Click + Add task to create a new task', { icon: '📝' })}
           />
         ))}
 
-        {/* Add a new column */}
-        <button
-          style={{
-            width: 240,
-            minWidth: 240,
-            height: 46,
-            border: '2px dashed var(--border-default)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'transparent',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontFamily: 'var(--font-display)',
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 6,
-            transition: 'all var(--transition)',
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-default)'; e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'transparent'; }}
-        >
+        {/* Add new column */}
+        <button className="kanban-new-section-btn">
           + New Section
         </button>
       </div>
@@ -152,6 +123,53 @@ export function KanbanBoard({ sections, tasks: initialTasks, onStatusChange }: K
       <DragOverlay>
         {activeTask && <TaskCard task={activeTask} isDragging />}
       </DragOverlay>
+
+      <style jsx>{`
+        .kanban-board {
+          display: flex;
+          gap: 14px;
+          padding: 4px 2px 24px;
+          overflow-x: auto;
+          align-items: flex-start;
+          min-height: 0;
+          scrollbar-width: thin;
+          scrollbar-color: var(--border-default) transparent;
+        }
+        .kanban-board::-webkit-scrollbar { height: 6px; }
+        .kanban-board::-webkit-scrollbar-track { background: transparent; }
+        .kanban-board::-webkit-scrollbar-thumb {
+          background: var(--border-default);
+          border-radius: 99px;
+        }
+
+        .kanban-new-section-btn {
+          width: 256px;
+          min-width: 256px;
+          height: 44px;
+          border: 2px dashed var(--border-default);
+          border-radius: var(--radius-lg);
+          background: transparent;
+          color: var(--text-muted);
+          cursor: pointer;
+          font-size: 13px;
+          font-family: var(--font-display);
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: all var(--transition);
+          flex-shrink: 0;
+          letter-spacing: -0.01em;
+          align-self: flex-start;
+          margin-top: 0;
+        }
+        .kanban-new-section-btn:hover {
+          border-color: var(--accent);
+          color: var(--accent);
+          background: rgba(37,99,235,0.04);
+        }
+      `}</style>
     </DndContext>
   );
 }

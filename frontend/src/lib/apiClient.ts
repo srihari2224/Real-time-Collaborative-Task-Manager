@@ -91,6 +91,10 @@ export interface ApiComment {
   created_at: string;
   updated_at: string;
   user?: ApiUser;
+  /** Flat author fields from SQL join (list endpoint) */
+  full_name?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
 }
 
 export interface ApiAttachment {
@@ -241,7 +245,22 @@ export const tasksApi = {
 
   // Comments
   listComments: (id: string) =>
-    api.get(`${BASE}/tasks/${id}/comments`).then(unwrap<ApiComment[]>),
+    api.get(`${BASE}/tasks/${id}/comments`).then((res) => {
+      const rows = unwrap<ApiComment[]>(res);
+      return rows.map((c) => ({
+        ...c,
+        user:
+          c.user ??
+          ({
+            id: c.user_id,
+            email: c.email ?? '',
+            full_name: c.full_name ?? null,
+            avatar_url: c.avatar_url ?? null,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+          } satisfies ApiUser),
+      }));
+    }),
   addComment: (id: string, content: string) =>
     api.post(`${BASE}/tasks/${id}/comments`, { content }).then(unwrap<ApiComment>),
   deleteComment: (id: string, commentId: string) =>
@@ -303,6 +322,6 @@ export const notificationsApi = {
 
 export const profileApi = {
   update: (data: { full_name?: string; avatar_url?: string }) =>
-    api.patch(`${BASE}/auth/profile`, data).then((res) => (res.data as any)?.data ?? res.data),
+    api.patch(`${BASE}/auth/profile`, data).then(unwrap<ApiUser>),
 };
 

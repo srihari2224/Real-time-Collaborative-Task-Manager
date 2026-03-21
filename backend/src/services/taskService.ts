@@ -56,3 +56,15 @@ export const isOwnerOrAdminOfProject = async (projectId: string, userId: string)
   );
   return rows.length > 0;
 };
+
+/** True if user is any member (any role) of the workspace that contains this project */
+export const isMemberOfProjectWorkspace = async (projectId: string, userId: string): Promise<boolean> => {
+  const { rows } = await query(
+    `SELECT 1 FROM projects p
+     JOIN workspace_members wm ON wm.workspace_id = p.workspace_id AND wm.user_id = $2
+     WHERE p.id = $1
+     LIMIT 1`,
+    [projectId, userId]
+  );
+  return rows.length > 0;
+};

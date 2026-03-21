@@ -29,15 +29,22 @@ interface LocalMessage {
 }
 
 function apiCommentToMessage(c: ApiComment): LocalMessage {
+  const u = c.user;
+  const displayName =
+    u?.full_name?.trim() ||
+    c.full_name?.trim() ||
+    u?.email ||
+    c.email ||
+    'User';
   return {
     id: c.id,
     task_id: c.task_id,
     sender_id: c.user_id,
     sender: {
-      id: c.user?.id ?? c.user_id,
-      name: c.user?.full_name ?? c.user?.email ?? 'User',
-      email: c.user?.email ?? '',
-      avatar_url: c.user?.avatar_url,
+      id: u?.id ?? c.user_id,
+      name: displayName,
+      email: u?.email ?? c.email ?? '',
+      avatar_url: u?.avatar_url ?? c.avatar_url ?? null,
     },
     content: c.content,
     reactions: [],
@@ -64,9 +71,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
-  const [expandedThread, setExpandedThread] = useState<string | null>(null);
   const [emojiPickerFor, setEmojiPickerFor] = useState<string | null>(null);
-  // Mention state
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionMembers, setMentionMembers] = useState<{ id: string; name: string; avatar_url?: string }[]>([]);
@@ -74,26 +79,12 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  // Tracks real IDs of messages we sent so socket echo is ignored
   const sentIdsRef = useRef<Set<string>>(new Set());
-  const messagesRef = useRef<LocalMessage[]>([]);
-  // Track processed message IDs to prevent duplicates from socket
   const processedIdsRef = useRef<Set<string>>(new Set());
-
-  // Keep messages ref in sync
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
 
   const dedupeById = (items: LocalMessage[]) => {
     const seen = new Set<string>();
-    const out: LocalMessage[] = [];
-    for (const m of items) {
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      out.push(m);
-    }
-    return out;
+    return items.filter((m) => seen.has(m.id) ? false : (seen.add(m.id), true));
   };
 
   const me = {
@@ -103,7 +94,6 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
     avatar_url: (currentUser as any)?.avatar_url ?? null,
   };
 
-  // Load workspace members for @mention
   useEffect(() => {
     if (!workspaceId) return;
     workspacesApi.getMembers(workspaceId).then((members) => {
@@ -114,10 +104,9 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
           avatar_url: m.user?.avatar_url ?? undefined,
         }))
       );
-    }).catch(() => {});
+    }).catch(() => { });
   }, [workspaceId]);
 
-  // ── Load comments & subscribe to socket ─────────────────────────────────
   useEffect(() => {
     let isMounted = true;
     let socketRef: Awaited<ReturnType<typeof getSocket>> | null = null;
@@ -140,35 +129,20 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
         s.on(SOCKET_EVENTS.COMMENT_CREATED, (data: { comment: ApiComment }) => {
           if (!isMounted) return;
           const msg = apiCommentToMessage(data.comment);
-          
-          // Skip if we've already processed this message ID
           if (processedIdsRef.current.has(msg.id)) return;
           processedIdsRef.current.add(msg.id);
-          
-          // Skip our own optimistically-added messages
-          if (sentIdsRef.current.has(msg.id)) {
-            sentIdsRef.current.delete(msg.id);
-            return;
-          }
-          
-          // Add new message only if it doesn't exist
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            return [...prev, msg];
-          });
+          if (sentIdsRef.current.has(msg.id)) { sentIdsRef.current.delete(msg.id); return; }
+          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
         });
 
         s.on(SOCKET_EVENTS.COMMENT_DELETED, (data: { commentId: string }) => {
           if (!isMounted) return;
           setMessages((prev) => prev.filter((m) => m.id !== data.commentId));
         });
-      } catch {
-        // Socket unavailable — REST only
-      }
+      } catch { /* REST only */ }
     };
 
     init();
-
     return () => {
       isMounted = false;
       if (socketRef) {
@@ -179,17 +153,14 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
     };
   }, [taskId]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  // Parse @mention trigger from input
   const handleInputChange = (val: string) => {
     setInput(val);
     const lastAtPos = val.lastIndexOf('@');
     if (lastAtPos !== -1) {
       const q = val.slice(lastAtPos + 1);
-      if (!q.includes(' ') && q.length >= 0) {
+      if (!q.includes(' ')) {
         setMentionQuery(q.toLowerCase());
         setMentionOpen(true);
         setMentionIndex(0);
@@ -205,8 +176,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
 
   const insertMention = (member: { id: string; name: string }) => {
     const lastAtPos = input.lastIndexOf('@');
-    const newInput = input.slice(0, lastAtPos) + `@${member.name} `;
-    setInput(newInput);
+    setInput(input.slice(0, lastAtPos) + `@${member.name} `);
     setMentionOpen(false);
     inputRef.current?.focus();
   };
@@ -216,7 +186,6 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
     ? messages.filter((m) => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
     : messages;
 
-  // ── Send message ─────────────────────────────────────────────────────────
   const sendMessage = async () => {
     if (!input.trim() || sending) return;
     const content = input.trim();
@@ -238,17 +207,13 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
     setMessages((prev) => [...prev, optimistic]);
     setReplyTo(null);
 
-    // Detect @mentions and create notifications for those users
     const mentionedNames = [...content.matchAll(/@(\w[\w\s]*?)(?=\s|$)/g)].map((m) => m[1].trim());
 
     try {
       const saved = await tasksApi.addComment(taskId, content);
       sentIdsRef.current.add(saved.id);
-      setMessages((prev) => dedupeById(
-        prev.map((m) => m.id === optimisticId ? apiCommentToMessage(saved) : m)
-      ));
+      setMessages((prev) => dedupeById(prev.map((m) => m.id === optimisticId ? apiCommentToMessage(saved) : m)));
 
-      // Create notifications for mentioned members
       for (const name of mentionedNames) {
         const member = mentionMembers.find((mm) => mm.name.toLowerCase() === name.toLowerCase());
         if (member && member.id !== me.id) {
@@ -259,7 +224,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
             message: content.slice(0, 100),
             entity_id: taskId,
             entity_type: 'task',
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
     } catch {
@@ -287,7 +252,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
       await tasksApi.deleteComment(taskId, msgId);
     } catch {
       toast.error('Failed to delete message');
-      tasksApi.listComments(taskId).then((cs) => setMessages(cs.map(apiCommentToMessage))).catch(() => {});
+      tasksApi.listComments(taskId).then((cs) => setMessages(cs.map(apiCommentToMessage))).catch(() => { });
     }
   };
 
@@ -308,7 +273,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
 
   const togglePin = (msg: LocalMessage) => {
     setMessages((prev) => prev.map((m) => ({ ...m, is_pinned: m.id === msg.id ? !m.is_pinned : false })));
-    toast.success(msg.is_pinned ? 'Unpinned' : 'Pinned! 📌');
+    toast.success(msg.is_pinned ? 'Unpinned' : 'Pinned!');
   };
 
   function groupReactions(reactions: LocalMessage['reactions']) {
@@ -324,7 +289,7 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
   function renderContent(text: string) {
     const parts = text.split(/(@\w[\w\s]*?(?=\s|$)|`[^`]+`|\*\*[^*]+\*\*|_[^_]+_)/g);
     return parts.map((part, i) => {
-      if (part.startsWith('@')) return <span key={i} className="mention">{part}</span>;
+      if (part.startsWith('@')) return <span key={i} className="chat-mention">{part}</span>;
       if (part.startsWith('`') && part.endsWith('`')) return <code key={i} className="chat-code-inline">{part.slice(1, -1)}</code>;
       if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>;
       if (part.startsWith('_') && part.endsWith('_')) return <em key={i}>{part.slice(1, -1)}</em>;
@@ -337,9 +302,9 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
       {/* Pinned Banner */}
       {pinnedMessage && (
         <div className="pinned-banner">
-          <Pin size={11} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <span style={{ fontWeight: 600, color: 'var(--accent)', marginRight: 4 }}>Pinned:</span>
-          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pinnedMessage.content}</span>
+          <Pin size={11} />
+          <span className="pinned-label">Pinned:</span>
+          <span className="pinned-content">{pinnedMessage.content}</span>
           <ChevronRight size={11} style={{ flexShrink: 0 }} />
         </div>
       )}
@@ -351,16 +316,19 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
             style={{ overflow: 'hidden', borderBottom: '1px solid var(--border-subtle)', flexShrink: 0 }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'var(--bg-elevated)' }}>
+            <div className="chat-search-bar">
               <Search size={13} style={{ color: 'var(--accent)' }} />
               <input
-                autoFocus value={searchQuery}
+                autoFocus
+                value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search messages..."
-                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}
+                className="chat-search-input"
               />
-              {searchQuery && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{filteredMessages.length} results</span>}
-              <button onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+              {searchQuery && (
+                <span className="chat-search-count">{filteredMessages.length} results</span>
+              )}
+              <button className="chat-search-close" onClick={() => { setShowSearch(false); setSearchQuery(''); }}>
                 <X size={13} />
               </button>
             </div>
@@ -371,100 +339,132 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
       {/* Messages */}
       <div className="chat-messages scroll-y">
         {loading ? (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120, gap: 8, color: 'var(--text-muted)' }}>
-            <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Loading messages...
+          <div className="chat-loading">
+            <Loader2 size={14} className="spin" />
+            <span>Loading messages...</span>
           </div>
         ) : filteredMessages.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 160, color: 'var(--text-muted)', gap: 12 }}>
-            <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Send size={22} style={{ color: 'var(--accent)' }} />
+          <div className="chat-empty">
+            <div className="chat-empty-icon">
+              <Send size={20} style={{ color: 'var(--accent)' }} />
             </div>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>No messages yet</p>
-              <p style={{ fontSize: 13 }}>Start the conversation with your team</p>
-            </div>
+            <p className="chat-empty-title">No messages yet</p>
+            <p className="chat-empty-subtitle">Start the conversation with your team</p>
           </div>
         ) : (
           filteredMessages.map((msg) => {
             const isOwn = msg.sender_id === me.id;
             const isEditing = editingId === msg.id;
             const grouped = groupReactions(msg.reactions);
-            const senderUser = { id: msg.sender.id, name: msg.sender.name, email: msg.sender.email, avatar_url: msg.sender.avatar_url ?? undefined, created_at: msg.created_at };
+            const senderUser = {
+              id: msg.sender.id,
+              name: msg.sender.name,
+              email: msg.sender.email,
+              avatar_url: msg.sender.avatar_url ?? undefined,
+              created_at: msg.created_at,
+            };
 
             return (
-              <div key={msg.id}>
-                <div
-                  className="chat-message"
-                  onMouseEnter={() => setHoveredMsgId(msg.id)}
-                  onMouseLeave={() => { setHoveredMsgId(null); setEmojiPickerFor(null); }}
-                >
-                  <div style={{ flexShrink: 0, paddingTop: 2 }}>
-                    <Avatar user={senderUser} size={28} />
+              <div
+                key={msg.id}
+                className={`chat-message ${hoveredMsgId === msg.id ? 'hovered' : ''}`}
+                onMouseEnter={() => setHoveredMsgId(msg.id)}
+                onMouseLeave={() => { setHoveredMsgId(null); setEmojiPickerFor(null); }}
+              >
+                <div style={{ flexShrink: 0, paddingTop: 2 }}>
+                  <Avatar user={senderUser} size={28} />
+                </div>
+
+                <div className="chat-message-body">
+                  <div className="chat-message-meta">
+                    <span className="chat-sender-name">{msg.sender.name}</span>
+                    <span className="chat-timestamp">{formatRelativeTime(msg.created_at)}</span>
+                    {msg.is_edited && <span className="chat-edited">edited</span>}
+                    {msg.is_pinned && <span className="chat-pinned-tag">Pinned</span>}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{msg.sender.name}</span>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{formatRelativeTime(msg.created_at)}</span>
-                      {msg.is_edited && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>edited</span>}
-                      {msg.is_pinned && <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700 }}>📌 Pinned</span>}
-                    </div>
-
-                    {isEditing ? (
-                      <div>
-                        <textarea
-                          autoFocus value={editContent}
-                          onChange={(e) => setEditContent(e.target.value)}
-                          style={{ width: '100%', background: 'var(--bg-elevated)', border: '1.5px solid var(--accent)', borderRadius: 'var(--radius-sm)', padding: '7px 10px', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'var(--font-display)', outline: 'none', resize: 'none', lineHeight: 1.5 }}
-                          rows={2}
-                        />
-                        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                          <button onClick={() => saveEdit(msg.id)} className="btn btn-primary btn-sm">Save</button>
-                          <button onClick={() => setEditingId(null)} className="btn btn-ghost btn-sm">Cancel</button>
-                        </div>
+                  {isEditing ? (
+                    <div>
+                      <textarea
+                        autoFocus
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="chat-edit-textarea"
+                        rows={2}
+                      />
+                      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                        <button onClick={() => saveEdit(msg.id)} className="btn btn-primary btn-sm">Save</button>
+                        <button onClick={() => setEditingId(null)} className="btn btn-ghost btn-sm">Cancel</button>
                       </div>
-                    ) : (
-                      <p style={{ fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.55, wordBreak: 'break-word' }}>
-                        {renderContent(msg.content)}
-                      </p>
-                    )}
+                    </div>
+                  ) : (
+                    <p className="chat-message-text">{renderContent(msg.content)}</p>
+                  )}
 
-                    {grouped.length > 0 && (
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                        {grouped.map(({ emoji, count, reacted }) => (
-                          <button key={emoji} className={`reaction-chip ${reacted ? 'reacted' : ''}`} onClick={() => addReaction(msg.id, emoji)}>
-                            {emoji} <span style={{ fontSize: 11, fontWeight: 600 }}>{count}</span>
+                  {grouped.length > 0 && (
+                    <div className="chat-reactions">
+                      {grouped.map(({ emoji, count, reacted }) => (
+                        <button
+                          key={emoji}
+                          className={`reaction-chip ${reacted ? 'reacted' : ''}`}
+                          onClick={() => addReaction(msg.id, emoji)}
+                        >
+                          {emoji} <span>{count}</span>
+                        </button>
+                      ))}
+                      <button
+                        className="reaction-chip"
+                        onClick={() => setEmojiPickerFor(emojiPickerFor === msg.id ? null : msg.id)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  )}
+
+                  <AnimatePresence>
+                    {emojiPickerFor === msg.id && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="emoji-picker"
+                      >
+                        {EMOJI_LIST.map((e) => (
+                          <button
+                            key={e}
+                            onClick={() => addReaction(msg.id, e)}
+                            className="emoji-btn"
+                          >
+                            {e}
                           </button>
                         ))}
-                        <button className="reaction-chip" onClick={() => setEmojiPickerFor(emojiPickerFor === msg.id ? null : msg.id)} style={{ fontSize: 14 }}>+</button>
-                      </div>
+                      </motion.div>
                     )}
+                  </AnimatePresence>
+                </div>
 
-                    <AnimatePresence>
-                      {emojiPickerFor === msg.id && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }}
-                          style={{ position: 'absolute', left: 0, background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius)', padding: '6px 8px', display: 'flex', gap: 4, zIndex: 10, boxShadow: 'var(--shadow-md)' }}
-                        >
-                          {EMOJI_LIST.map((e) => (
-                            <button key={e} onClick={() => addReaction(msg.id, e)} style={{ fontSize: 18, background: 'none', border: 'none', cursor: 'pointer', padding: '2px', borderRadius: 4, transition: 'transform var(--transition)' }} onMouseEnter={(el) => (el.currentTarget.style.transform = 'scale(1.3)')} onMouseLeave={(el) => (el.currentTarget.style.transform = 'scale(1)')}>
-                              {e}
-                            </button>
-                          ))}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Hover Actions */}
-                  <div className="chat-message-actions">
-                    <ActionBtn onClick={() => addReaction(msg.id, '👍')} title="Like">👍</ActionBtn>
-                    <ActionBtn onClick={() => setEmojiPickerFor(emojiPickerFor === msg.id ? null : msg.id)} title="React"><Smile size={12} /></ActionBtn>
-                    <ActionBtn onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }} title="Reply"><Reply size={12} /></ActionBtn>
-                    <ActionBtn onClick={() => togglePin(msg)} title="Pin"><Pin size={12} /></ActionBtn>
-                    {isOwn && <ActionBtn onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }} title="Edit"><Edit3 size={12} /></ActionBtn>}
-                    {isOwn && <ActionBtn onClick={() => deleteMessage(msg.id)} title="Delete" danger><Trash2 size={12} /></ActionBtn>}
-                  </div>
+                {/* Hover actions */}
+                <div className="chat-msg-actions">
+                  <ActionBtn onClick={() => addReaction(msg.id, '👍')} title="Like">👍</ActionBtn>
+                  <ActionBtn onClick={() => setEmojiPickerFor(emojiPickerFor === msg.id ? null : msg.id)} title="React">
+                    <Smile size={12} />
+                  </ActionBtn>
+                  <ActionBtn onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }} title="Reply">
+                    <Reply size={12} />
+                  </ActionBtn>
+                  <ActionBtn onClick={() => togglePin(msg)} title="Pin">
+                    <Pin size={12} />
+                  </ActionBtn>
+                  {isOwn && (
+                    <ActionBtn onClick={() => { setEditingId(msg.id); setEditContent(msg.content); }} title="Edit">
+                      <Edit3 size={12} />
+                    </ActionBtn>
+                  )}
+                  {isOwn && (
+                    <ActionBtn onClick={() => deleteMessage(msg.id)} title="Delete" danger>
+                      <Trash2 size={12} />
+                    </ActionBtn>
+                  )}
                 </div>
               </div>
             );
@@ -478,13 +478,16 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
         {replyTo && (
           <motion.div
             initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            style={{ padding: '6px 16px', background: 'var(--accent-soft)', borderTop: '1px solid rgba(37,99,235,0.15)', flexShrink: 0, overflow: 'hidden' }}
+            className="reply-banner"
+            style={{ overflow: 'hidden' }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <div className="reply-banner-inner">
               <Reply size={11} style={{ color: 'var(--accent)' }} />
-              <span style={{ color: 'var(--text-secondary)' }}>Replying to <strong style={{ color: 'var(--accent)' }}>{replyTo.sender.name}</strong></span>
-              <span style={{ color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{replyTo.content.slice(0, 60)}</span>
-              <button onClick={() => setReplyTo(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={12} /></button>
+              <span>Replying to <strong style={{ color: 'var(--accent)' }}>{replyTo.sender.name}</strong></span>
+              <span className="reply-preview">{replyTo.content.slice(0, 60)}</span>
+              <button onClick={() => setReplyTo(null)} className="reply-close-btn">
+                <X size={12} />
+              </button>
             </div>
           </motion.div>
         )}
@@ -496,13 +499,22 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
           {/* Mention Dropdown */}
           <AnimatePresence>
             {mentionOpen && filteredMentionMembers.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }} className="mention-dropdown" style={{ bottom: '100%', marginBottom: 4 }}>
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
+                className="mention-dropdown"
+              >
                 {filteredMentionMembers.map((m, i) => (
-                  <div key={m.id} className={`mention-item ${i === mentionIndex ? 'active' : ''}`} onClick={() => insertMention(m)}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
+                  <div
+                    key={m.id}
+                    className={`mention-item ${i === mentionIndex ? 'active' : ''}`}
+                    onClick={() => insertMention(m)}
+                  >
+                    <div className="mention-avatar">
                       {m.name[0]?.toUpperCase()}
                     </div>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{m.name}</span>
+                    <span className="mention-name">{m.name}</span>
                   </div>
                 ))}
               </motion.div>
@@ -516,23 +528,26 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
               value={input}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={replyTo ? `Replying to ${replyTo.sender.name}... (Enter to send)` : 'Message the team... (Enter to send, @ to mention)'}
+              placeholder={replyTo ? `Replying to ${replyTo.sender.name}...` : 'Message the team... (@ to mention)'}
               rows={1}
-              style={{ minHeight: 36 }}
               disabled={sending}
             />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button onClick={() => setShowSearch(!showSearch)} title="Search messages" className="btn btn-ghost btn-sm" style={{ padding: '4px 8px' }}>
+            <div className="chat-input-footer">
+              <div className="chat-input-tools">
+                <button
+                  onClick={() => setShowSearch(!showSearch)}
+                  title="Search messages"
+                  className="chat-tool-btn"
+                >
                   <Search size={13} />
                 </button>
-                <button title="Emoji" className="btn btn-ghost btn-sm" style={{ padding: '4px 8px' }}>
+                <button title="Emoji" className="chat-tool-btn">
                   <Smile size={13} />
                 </button>
                 <button
-                  title="Mention someone"
+                  title="Mention"
                   onClick={() => { setInput(input + '@'); inputRef.current?.focus(); handleInputChange(input + '@'); }}
-                  className="btn btn-ghost btn-sm" style={{ padding: '4px 8px' }}
+                  className="chat-tool-btn"
                 >
                   <AtSign size={13} />
                 </button>
@@ -540,28 +555,455 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
               <button
                 onClick={sendMessage}
                 disabled={!input.trim() || sending}
-                className="btn btn-primary btn-sm"
-                style={{ opacity: input.trim() && !sending ? 1 : 0.5 }}
+                className="chat-send-btn"
+                style={{ opacity: input.trim() && !sending ? 1 : 0.45 }}
               >
-                {sending ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+                {sending ? <Loader2 size={12} className="spin" /> : <Send size={12} />}
                 {sending ? 'Sending…' : 'Send'}
               </button>
             </div>
           </div>
         </div>
-        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 5 }}>Enter to send · Shift+Enter for new line · @ to mention</p>
+        <p className="chat-input-hint">Enter to send · Shift+Enter for new line · @ to mention</p>
       </div>
+
+      <style jsx>{`
+        .chat-container {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+
+        /* Pinned banner */
+        .pinned-banner {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 7px 16px;
+          background: rgba(37,99,235,0.07);
+          border-bottom: 1px solid rgba(37,99,235,0.12);
+          font-size: 12px;
+          color: var(--text-secondary);
+          flex-shrink: 0;
+        }
+        .pinned-label { font-weight: 700; color: var(--accent); }
+        .pinned-content { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        /* Search bar */
+        .chat-search-bar {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 16px;
+          background: var(--bg-elevated);
+        }
+        .chat-search-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          font-size: 13px;
+          color: var(--text-primary);
+          font-family: var(--font-display);
+        }
+        .chat-search-count { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+        .chat-search-close {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          padding: 2px;
+          border-radius: 4px;
+          transition: color var(--transition);
+        }
+        .chat-search-close:hover { color: var(--text-primary); }
+
+        /* Messages */
+        .chat-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px 0;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .chat-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100px;
+          gap: 8px;
+          color: var(--text-muted);
+          font-size: 13px;
+        }
+        .chat-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          height: 160px;
+          gap: 8px;
+          color: var(--text-muted);
+        }
+        .chat-empty-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: rgba(37,99,235,0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 4px;
+        }
+        .chat-empty-title { font-size: 14px; font-weight: 700; color: var(--text-secondary); }
+        .chat-empty-subtitle { font-size: 12.5px; color: var(--text-muted); }
+
+        /* Message */
+        .chat-message {
+          position: relative;
+          display: flex;
+          gap: 10px;
+          padding: 6px 16px;
+          transition: background var(--transition);
+          border-radius: 0;
+        }
+        .chat-message.hovered { background: var(--bg-elevated); }
+        .chat-message-body { flex: 1; min-width: 0; }
+        .chat-message-meta {
+          display: flex;
+          align-items: baseline;
+          gap: 7px;
+          margin-bottom: 3px;
+        }
+        .chat-sender-name {
+          font-size: 14px;
+          font-weight: 800;
+          color: var(--text-primary);
+          letter-spacing: -0.02em;
+          line-height: 1.2;
+        }
+        html.dark .chat-sender-name {
+          color: #f8fafc;
+        }
+        .chat-timestamp { font-size: 10.5px; color: var(--text-muted); font-weight: 500; }
+        .chat-edited { font-size: 10px; color: var(--text-muted); font-style: italic; }
+        .chat-pinned-tag { font-size: 10px; color: var(--accent); font-weight: 700; }
+        .chat-message-text {
+          font-size: 13.5px;
+          color: var(--text-primary);
+          line-height: 1.55;
+          word-break: break-word;
+          letter-spacing: -0.01em;
+        }
+
+        :global(.chat-mention) {
+          color: var(--accent);
+          background: rgba(37,99,235,0.1);
+          border-radius: 4px;
+          padding: 0 3px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        :global(.chat-code-inline) {
+          background: var(--bg-overlay);
+          border: 1px solid var(--border-default);
+          border-radius: 4px;
+          padding: 1px 5px;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          color: var(--accent);
+        }
+
+        /* Reactions */
+        .chat-reactions {
+          display: flex;
+          gap: 4px;
+          flex-wrap: wrap;
+          margin-top: 5px;
+        }
+        :global(.reaction-chip) {
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 2px 7px;
+          border-radius: 99px;
+          border: 1px solid var(--border-default);
+          background: var(--bg-elevated);
+          cursor: pointer;
+          font-size: 13px;
+          transition: all 150ms ease;
+          color: var(--text-secondary);
+          font-family: var(--font-display);
+        }
+        :global(.reaction-chip span) { font-size: 11px; font-weight: 700; }
+        :global(.reaction-chip:hover) { border-color: var(--accent); background: rgba(37,99,235,0.08); }
+        :global(.reaction-chip.reacted) {
+          background: rgba(37,99,235,0.1);
+          border-color: rgba(37,99,235,0.3);
+          color: var(--accent);
+        }
+
+        /* Emoji picker */
+        .emoji-picker {
+          position: absolute;
+          left: 0;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius);
+          padding: 6px 8px;
+          display: flex;
+          gap: 4px;
+          z-index: 10;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .emoji-btn {
+          font-size: 18px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 2px;
+          border-radius: 4px;
+          transition: transform 100ms ease;
+        }
+        .emoji-btn:hover { transform: scale(1.3); }
+
+        /* Hover actions */
+        .chat-msg-actions {
+          position: absolute;
+          top: 4px;
+          right: 8px;
+          display: flex;
+          gap: 2px;
+          opacity: 0;
+          transition: opacity 150ms ease;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius);
+          padding: 2px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .chat-message.hovered .chat-msg-actions { opacity: 1; }
+
+        /* Edit textarea */
+        .chat-edit-textarea {
+          width: 100%;
+          background: var(--bg-elevated);
+          border: 1.5px solid var(--accent);
+          border-radius: var(--radius-sm);
+          padding: 7px 10px;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-family: var(--font-display);
+          outline: none;
+          resize: none;
+          line-height: 1.5;
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+
+        /* Reply banner */
+        .reply-banner {
+          padding: 7px 16px;
+          background: rgba(37,99,235,0.06);
+          border-top: 1px solid rgba(37,99,235,0.12);
+          flex-shrink: 0;
+        }
+        .reply-banner-inner {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          font-size: 12px;
+          color: var(--text-secondary);
+        }
+        .reply-preview {
+          color: var(--text-muted);
+          flex: 1;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .reply-close-btn {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          display: flex;
+          padding: 2px;
+          border-radius: 4px;
+          transition: color var(--transition);
+        }
+        .reply-close-btn:hover { color: var(--text-primary); }
+
+        /* Mention dropdown */
+        .mention-dropdown {
+          position: absolute;
+          bottom: calc(100% + 6px);
+          left: 0;
+          right: 0;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: var(--radius);
+          overflow: hidden;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+          z-index: 20;
+        }
+        .mention-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          cursor: pointer;
+          transition: background var(--transition);
+        }
+        .mention-item:hover, .mention-item.active { background: var(--bg-hover); }
+        .mention-avatar {
+          width: 26px;
+          height: 26px;
+          border-radius: 50%;
+          background: rgba(37,99,235,0.12);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 11px;
+          font-weight: 800;
+          color: var(--accent);
+          flex-shrink: 0;
+        }
+        .mention-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+        /* Input area */
+        .chat-input-area {
+          padding: 10px 14px 12px;
+          flex-shrink: 0;
+          border-top: 1px solid var(--border-subtle);
+          background: var(--bg-surface);
+        }
+        .chat-input-box {
+          background: var(--bg-elevated);
+          border: 1.5px solid var(--border-default);
+          border-radius: var(--radius);
+          overflow: hidden;
+          transition: border-color 200ms ease, box-shadow 200ms ease;
+        }
+        .chat-input-box:focus-within {
+          border-color: var(--accent);
+          box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+        .chat-input-textarea {
+          width: 100%;
+          padding: 10px 12px 6px;
+          background: transparent;
+          border: none;
+          outline: none;
+          font-size: 13.5px;
+          font-family: var(--font-display);
+          color: var(--text-primary);
+          resize: none;
+          min-height: 38px;
+          max-height: 120px;
+          line-height: 1.5;
+          letter-spacing: -0.01em;
+        }
+        .chat-input-textarea::placeholder { color: var(--text-muted); }
+        .chat-input-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 4px 8px 6px;
+          border-top: 1px solid var(--border-subtle);
+        }
+        .chat-input-tools { display: flex; gap: 2px; }
+        .chat-tool-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: var(--radius-sm);
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all var(--transition);
+        }
+        .chat-tool-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+        .chat-send-btn {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 5px 12px;
+          background: var(--accent);
+          color: white;
+          border: none;
+          border-radius: var(--radius-sm);
+          font-family: var(--font-display);
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 150ms ease;
+          letter-spacing: -0.01em;
+        }
+        .chat-send-btn:not(:disabled):hover {
+          background: var(--accent-hover);
+          transform: translateY(-1px);
+        }
+        .chat-send-btn:disabled { cursor: not-allowed; }
+
+        .chat-input-hint {
+          font-size: 10.5px;
+          color: var(--text-faint);
+          margin-top: 5px;
+          font-weight: 500;
+        }
+
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   );
 }
 
-function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
+function ActionBtn({
+  onClick,
+  title,
+  danger,
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <button
-      onClick={onClick} title={title}
-      style={{ width: 26, height: 26, borderRadius: 'var(--radius-sm)', background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: danger ? 'var(--error)' : 'var(--text-muted)', transition: 'all var(--transition)', fontSize: 13 }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = danger ? 'var(--error-soft)' : 'var(--bg-overlay)'; e.currentTarget.style.color = danger ? 'var(--error)' : 'var(--text-primary)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = danger ? 'var(--error)' : 'var(--text-muted)'; }}
+      onClick={onClick}
+      title={title}
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: 'var(--radius-sm)',
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: danger ? '#ef4444' : 'var(--text-muted)',
+        transition: 'all var(--transition)',
+        fontSize: 13,
+        flexShrink: 0,
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = danger ? 'rgba(239,68,68,0.1)' : 'var(--bg-overlay)';
+        e.currentTarget.style.color = danger ? '#ef4444' : 'var(--text-primary)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.color = danger ? '#ef4444' : 'var(--text-muted)';
+      }}
     >
       {children}
     </button>

@@ -99,7 +99,7 @@ function AuthContent() {
     if (stored) {
       try {
         const p = JSON.parse(stored);
-        if (p?.state?.googleUser && p?.state?.token) { router.replace('/'); return; }
+        if (p?.state?.token) { router.replace('/'); return; }
       } catch { /* ignore */ }
     }
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -250,6 +250,7 @@ function AuthContent() {
       </div>
 
       {/* ════════════════ RIGHT PANEL ════════════════ */}
+      {/* ════════════════ RIGHT PANEL ════════════════ */}
       <div className="auth-right">
         <div className="auth-form-wrap">
 
@@ -259,14 +260,7 @@ function AuthContent() {
             <span>TaskFlow</span>
           </div>
 
-          {/* Mode tabs */}
-          <div className="mode-tabs">
-            <button className={`mode-tab ${isLogin ? 'active' : ''}`} onClick={() => switchMode('login')}>Sign In</button>
-            <button className={`mode-tab ${!isLogin ? 'active' : ''}`} onClick={() => switchMode('signup')}>Sign Up</button>
-            <div className="mode-tab-indicator" style={{ transform: `translateX(${isLogin ? '0%' : '100%'})` }} />
-          </div>
-
-          {/* Header */}
+          {/* 1. Header */}
           <AnimatePresence mode="wait">
             <motion.div
               key={mode + '-hdr'}
@@ -281,13 +275,14 @@ function AuthContent() {
             </motion.div>
           </AnimatePresence>
 
-          {/* Google first */}
-          <GoogleBtn onClick={handleGoogleLogin} />
+          {/* 2. Mode tabs */}
+          <div className="mode-tabs">
+            <button className={`mode-tab ${isLogin ? 'active' : ''}`} onClick={() => switchMode('login')}>Sign In</button>
+            <button className={`mode-tab ${!isLogin ? 'active' : ''}`} onClick={() => switchMode('signup')}>Sign Up</button>
+            <div className="mode-tab-indicator" style={{ transform: `translateX(${isLogin ? '0%' : '100%'})` }} />
+          </div>
 
-          {/* Divider */}
-          <div className="divider-row"><span>or with email</span></div>
-
-          {/* Form */}
+          {/* 3. Email / Password Form */}
           <AnimatePresence mode="wait">
             {isLogin ? (
               <motion.form
@@ -334,13 +329,19 @@ function AuthContent() {
             )}
           </AnimatePresence>
 
+          {/* 4. Divider */}
+          <div className="divider-row"><span>or continue with</span></div>
+
+          {/* 5. Google button */}
+          <GoogleBtn onClick={handleGoogleLogin} />
+
           {/* Switch mode link */}
-          <p className="switch-cta">
+          {/* <p className="switch-cta">
             {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
             <button type="button" className="switch-link" onClick={() => switchMode(isLogin ? 'signup' : 'login')}>
               {isLogin ? 'Sign up free' : 'Sign in'}
             </button>
-          </p>
+          </p> */}
 
           {/* Footer */}
           <p className="auth-tos">

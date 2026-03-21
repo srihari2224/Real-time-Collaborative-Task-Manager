@@ -17,3 +17,12 @@ export const syncUser = async (supabaseUser: SupabaseUserLike, extras: Partial<U
 
 export const getMe = async (userId: string): Promise<User | null> =>
   userRepository.findById(userId);
+
+export const updateProfile = async (
+  userId: string,
+  data: { full_name?: string | null; avatar_url?: string | null }
+): Promise<User> =>
+  userRepository.updateUser(userId, {
+    full_name: data.full_name,
+    avatar_url: data.avatar_url,
+  });

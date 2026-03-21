@@ -1,104 +1,144 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, CSSProperties } from 'react';
 import { useParams } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { TopBar } from '@/components/layout/TopBar';
-import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ViewType } from '@/types';
 import { useUIStore } from '@/stores/uiStore';
-import { projectsApi, tasksApi, usersApi, type ApiProject, type ApiTask, type ApiUser } from '@/lib/apiClient';
-import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
-  List, Calendar, BarChart2, Filter,
-  Share2, ChevronDown, ChevronRight, Plus, Loader2, X, MessageSquare, Paperclip
+  projectsApi, tasksApi, usersApi,
+  type ApiProject, type ApiTask, type ApiUser,
+} from '@/lib/apiClient';
+import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, Tooltip,
+} from 'recharts';
+import {
+  List, Calendar, BarChart2,
+  Plus, Loader2, X,
+  Sparkles, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { formatDate, isOverdue, PRIORITY_CONFIG } from '@/lib/utils';
-import { Priority } from '@/types';
+import { formatDate, isOverdue } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 
-// Map backend status → Kanban section label
-const STATUS_LABELS: Record<ApiTask['status'], string> = {
-  todo: 'To Do',
-  in_progress: 'In Progress',
-  in_review: 'In Review',
-  done: 'Done',
-  cancelled: 'Cancelled',
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Static config                                                               */
+/* ─────────────────────────────────────────────────────────────────────────── */
+const PRIORITY_STYLE: Record<string, { color: string; bg: string; border: string; stripe: string }> = {
+  urgent: { color: '#dc2626', bg: 'rgba(220,38,38,0.09)', border: 'rgba(220,38,38,0.22)', stripe: '#dc2626' },
+  high: { color: '#ea580c', bg: 'rgba(234,88,12,0.09)', border: 'rgba(234,88,12,0.22)', stripe: '#ea580c' },
+  medium: { color: '#2563eb', bg: 'rgba(37,99,235,0.09)', border: 'rgba(37,99,235,0.22)', stripe: '#2563eb' },
+  low: { color: '#64748b', bg: 'rgba(100,116,139,0.09)', border: 'rgba(100,116,139,0.22)', stripe: '#94a3b8' },
 };
 
-const STATUS_ORDER: ApiTask['status'][] = ['todo', 'in_progress', 'in_review', 'done'];
-
-const VIEW_TABS: { key: ViewType; label: string; icon: React.ReactNode }[] = [
-  { key: 'list', label: 'List', icon: <List size={13} /> },
-  { key: 'calendar', label: 'Calendar', icon: <Calendar size={13} /> },
-  { key: 'overview', label: 'Overview', icon: <BarChart2 size={13} /> },
+/* Fix 1: Use React.ComponentType — needs explicit React import at top */
+const VIEW_TABS: { key: ViewType; label: string; Icon: React.ComponentType<{ size?: number }> }[] = [
+  { key: 'list', label: 'List', Icon: List },
+  { key: 'calendar', label: 'Calendar', Icon: Calendar },
+  { key: 'overview', label: 'Overview', Icon: BarChart2 },
 ];
 
+const PIE_COLORS = ['#16a34a', '#7c3aed', '#d97706', '#dc2626'];
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Shared interface for the shape sub-components expect                        */
+/* ─────────────────────────────────────────────────────────────────────────── */
+interface KanbanAssignee {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
+  created_at: string;
+}
+
+interface KanbanTask extends Omit<ApiTask, 'assignees'> {
+  section_id: string;
+  assignees: KanbanAssignee[];
+  watchers: never[];
+  labels: never[];
+  subtasks: never[];
+  attachments: never[];
+  unread_chat_count: number;
+}
+
+const KANBAN_COLUMNS: {
+  key: 'todo' | 'in_progress' | 'done';
+  label: string;
+  match: (t: KanbanTask) => boolean;
+}[] = [
+  { key: 'todo', label: 'To Do', match: (t) => t.status === 'todo' || t.status === 'cancelled' },
+  { key: 'in_progress', label: 'In Progress', match: (t) => t.status === 'in_progress' || t.status === 'in_review' },
+  { key: 'done', label: 'Done', match: (t) => t.status === 'done' },
+];
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Page                                                                        */
+/* ─────────────────────────────────────────────────────────────────────────── */
 export default function ProjectPage() {
   const params = useParams();
+  const queryClient = useQueryClient();
   const { activeView, setActiveView, openTaskPanel } = useUIStore();
   const projectId = params?.projectId as string;
   const workspaceId = params?.workspaceId as string;
 
-  const [project, setProject] = useState<ApiProject | null>(null);
-  const [tasks, setTasks] = useState<ApiTask[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showNewTask, setShowNewTask] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!projectId) return;
-    setLoading(true);
-    try {
-      const [proj, taskList] = await Promise.all([
-        projectsApi.get(projectId),
-        tasksApi.listByProject(projectId),
-      ]);
-      setProject(proj);
-      setTasks(taskList);
-    } catch {
-      toast.error('Failed to load project');
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+  const { data: project, isPending: projectPending, isError: projectError } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectsApi.get(projectId!),
+    enabled: !!projectId,
+    staleTime: 60_000,
+  });
 
-  useEffect(() => { loadData(); }, [loadData]);
+  const { data: tasks = [], isPending: tasksPending } = useQuery({
+    queryKey: ['project-tasks', projectId],
+    queryFn: () => tasksApi.listByProject(projectId!),
+    enabled: !!projectId,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
 
-  // ── Socket: real-time task updates ──────────────────────────────────────
   useEffect(() => {
-    if (!workspaceId) return;
-    let isMounted = true;
+    if (projectError) toast.error('Failed to load project');
+  }, [projectError]);
+
+  useEffect(() => {
+    if (!workspaceId || !projectId) return;
+    let mounted = true;
     let s: Awaited<ReturnType<typeof getSocket>> | null = null;
 
     getSocket().then((socket) => {
-      if (!isMounted) return;
+      if (!mounted) return;
       s = socket;
       socket.emit(SOCKET_EVENTS.JOIN_WORKSPACE, workspaceId);
 
       socket.on(SOCKET_EVENTS.TASK_CREATED, (data: { task: ApiTask }) => {
-        if (!isMounted) return;
-        if (data.task.project_id === projectId) {
-          setTasks((prev) => prev.some((t) => t.id === data.task.id) ? prev : [...prev, data.task]);
-          toast.success(`New task: ${data.task.title}`, { duration: 2000, id: `task-created-${data.task.id}` });
-        }
+        if (!mounted || data.task.project_id !== projectId) return;
+        queryClient.setQueryData<ApiTask[]>(['project-tasks', projectId], (old) => {
+          const o = old ?? [];
+          return o.some((t) => t.id === data.task.id) ? o : [...o, data.task];
+        });
+        toast.success(`New task: ${data.task.title}`, { duration: 2000, id: `tc-${data.task.id}` });
       });
-
       socket.on(SOCKET_EVENTS.TASK_UPDATED, (data: { task: ApiTask }) => {
-        if (!isMounted) return;
-        if (data.task.project_id === projectId) {
-          setTasks((prev) => prev.map((t) => t.id === data.task.id ? data.task : t));
-        }
+        if (!mounted || data.task.project_id !== projectId) return;
+        queryClient.setQueryData<ApiTask[]>(['project-tasks', projectId], (old) =>
+          (old ?? []).map((t) => (t.id === data.task.id ? data.task : t))
+        );
       });
-
       socket.on(SOCKET_EVENTS.TASK_DELETED, (data: { taskId: string }) => {
-        if (!isMounted) return;
-        setTasks((prev) => prev.filter((t) => t.id !== data.taskId));
+        if (!mounted) return;
+        queryClient.setQueryData<ApiTask[]>(['project-tasks', projectId], (old) =>
+          (old ?? []).filter((t) => t.id !== data.taskId)
+        );
       });
     }).catch(() => {});
 
     return () => {
-      isMounted = false;
+      mounted = false;
       if (s) {
         s.emit(SOCKET_EVENTS.LEAVE_WORKSPACE, workspaceId);
         s.off(SOCKET_EVENTS.TASK_CREATED);
@@ -106,255 +146,232 @@ export default function ProjectPage() {
         s.off(SOCKET_EVENTS.TASK_DELETED);
       }
     };
-  }, [workspaceId, projectId]);
+  }, [workspaceId, projectId, queryClient]);
 
-  const completedTasks = tasks.filter((t) => t.status === 'done').length;
-  const progressPct = tasks.length > 0 ? (completedTasks / tasks.length) * 100 : 0;
-
-  // Build Kanban-compatible sections from task statuses
-  const kanbanSections = STATUS_ORDER.map((status) => ({
-    id: status,
-    project_id: projectId,
-    name: STATUS_LABELS[status],
-    position: STATUS_ORDER.indexOf(status),
-  }));
-
-  // Map API tasks to the shape KanbanBoard expects
-  const kanbanTasks = tasks.map((t) => ({
+  const kanbanTasks: KanbanTask[] = tasks.map((t) => ({
     ...t,
     section_id: t.status,
-    assignees: (t.assignees ?? []).map((a) => ({ id: a.id, name: a.full_name ?? a.email, email: a.email, avatar_url: a.avatar_url, created_at: '' })),
-    watchers: [], labels: [], subtasks: [], attachments: [], unread_chat_count: 0,
-    created_by: t.created_by,
+    assignees: (t.assignees ?? []).map((a) => ({
+      id: a.id,
+      name: a.full_name ?? a.email ?? '',
+      email: a.email,
+      avatar_url: a.avatar_url,
+      created_at: '',
+    })),
+    watchers: [] as never[],
+    labels: [] as never[],
+    subtasks: [] as never[],
+    attachments: [] as never[],
+    unread_chat_count: 0,
   }));
 
-  if (loading) {
+  const initialLoad = projectPending && !project;
+
+  if (initialLoad) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        <TopBar title="Loading..." />
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, color: 'var(--text-muted)' }}>
-          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Loading project...
+      <>
+        <style>{CSS}</style>
+        <div className="pp-root">
+          <TopBar title="Loading…" />
+          <div className="pp-loader">
+            <Loader2 size={20} className="pp-spin" />
+            <span>Loading project…</span>
+          </div>
         </div>
-        <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
+      </>
     );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <TopBar
-        title={project?.name ?? 'Project'}
-        actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
-              <Filter size={12} /> Filter
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 12, padding: '5px 10px' }}>
-              <Share2 size={12} /> Share
-            </button>
+    <>
+      <style>{CSS}</style>
+      <div className="pp-root">
+        <TopBar title={project?.name ?? 'Project'} />
+
+        <div className="pp-view-bar">
+          <div className="pp-view-tabs">
+            {VIEW_TABS.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                type="button"
+                className={`pp-view-tab${activeView === key ? ' active' : ''}`}
+                onClick={() => setActiveView(key)}
+              >
+                <Icon size={13} /> {label}
+              </button>
+            ))}
           </div>
-        }
-      />
-
-      {/* View Toggle & Progress */}
-      <div style={{ padding: '0 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
-        <div className="tab-bar" style={{ borderBottom: 'none' }}>
-          {VIEW_TABS.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => setActiveView(v.key)}
-              className={`tab-item ${activeView === v.key ? 'active' : ''}`}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12.5 }}
-            >
-              {v.icon} {v.label}
-            </button>
-          ))}
+          <button type="button" className="pp-add-task-bar-btn" onClick={() => setShowNewTask(true)}>
+            <Plus size={15} /> Add Task
+          </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 200 }}>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>{completedTasks}/{tasks.length} done</span>
-          <div style={{ flex: 1 }}><ProgressBar value={progressPct} /></div>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 600 }}>{Math.round(progressPct)}%</span>
+
+        <div className="pp-content">
+          {activeView === 'list' && (
+            <KanbanView tasks={kanbanTasks} onTaskClick={openTaskPanel} loadingTasks={tasksPending && tasks.length === 0} />
+          )}
+          {activeView === 'calendar' && <CalendarView tasks={kanbanTasks} onTaskClick={openTaskPanel} />}
+          {activeView === 'overview' && <OverviewView tasks={tasks} />}
         </div>
+
+        <AnimatePresence>
+          {showNewTask && (
+            <NewTaskModal
+              projectId={projectId}
+              onClose={() => setShowNewTask(false)}
+              onCreated={(task) => {
+                queryClient.setQueryData<ApiTask[]>(['project-tasks', projectId], (old) => [
+                  ...(old ?? []),
+                  task,
+                ]);
+                setShowNewTask(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
       </div>
-
-      {/* Main Content */}
-      <div style={{ flex: 1, overflow: 'hidden', padding: activeView === 'kanban' ? '16px 20px' : '0' }}>
-        {activeView === 'list' && (
-          <ListView sections={kanbanSections} tasks={kanbanTasks as any} onTaskClick={openTaskPanel} onAddTask={() => setShowNewTask(true)} />
-        )}
-        {activeView === 'calendar' && (
-          <CalendarView tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
-        )}
-        {activeView === 'overview' && (
-          <OverviewView tasks={tasks} />
-        )}
-      </div>
-
-      {/* New Task Modal */}
-      <AnimatePresence>
-        {showNewTask && (
-          <NewTaskModal
-            projectId={projectId}
-            onClose={() => setShowNewTask(false)}
-            onCreated={(task) => { setTasks((prev) => [...prev, task]); setShowNewTask(false); }}
-          />
-        )}
-      </AnimatePresence>
-
-      <style jsx global>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </>
   );
 }
 
-// ─── New Task Modal (multi-assignee) ──────────────────────────────────────────
-
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  New Task Modal                                                              */
+/* ─────────────────────────────────────────────────────────────────────────── */
 function NewTaskModal({ projectId, onClose, onCreated }: {
   projectId: string;
   onClose: () => void;
-  onCreated: (task: ApiTask) => void;
+  onCreated: (t: ApiTask) => void;
 }) {
-  const [title, setTitle]         = useState('');
-  const [description, setDesc]    = useState('');
-  const [priority, setPriority]   = useState<ApiTask['priority']>('medium');
-  const [dueDate, setDueDate]     = useState('');
+  const [title, setTitle] = useState('');
+  const [desc, setDesc] = useState('');
+  const [priority, setPriority] = useState<ApiTask['priority']>('medium');
+  const [dueDate, setDueDate] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [assignees, setAssignees] = useState<ApiUser[]>([]);
-  const [assigneeLookupError, setAssigneeLookupError] = useState<string | null>(null);
-  const [addingAssignee, setAddingAssignee] = useState(false);
-  const [saving, setSaving]       = useState(false);
+  const [lookupErr, setLookupErr] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const addEmail = async () => {
     const e = emailInput.trim().toLowerCase();
     if (!e) return;
-    if (assignees.some((a) => a.email.toLowerCase() === e)) {
-      setEmailInput('');
-      return;
-    }
-    setAddingAssignee(true);
-    setAssigneeLookupError(null);
+    if (assignees.some((a) => a.email.toLowerCase() === e)) { setEmailInput(''); return; }
+    setAdding(true); setLookupErr(null);
     try {
       const user = await usersApi.lookupByEmail(e);
-      setAssignees((prev) => [...prev, user]);
+      setAssignees((p) => [...p, user]);
       setEmailInput('');
       toast.success('Assignee added');
     } catch {
-      const msg = 'User not found';
-      setAssigneeLookupError(msg);
-      toast.error(msg);
-    } finally {
-      setAddingAssignee(false);
-    }
+      setLookupErr('User not found');
+      toast.error('User not found');
+    } finally { setAdding(false); }
   };
-
-  const removeEmail = (email: string) =>
-    setAssignees((prev) => prev.filter((u) => u.email !== email));
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
     try {
-      // Resolve emails → user ids via workspace members list
-      const task = await tasksApi.create({
+      const task = await (tasksApi.create as (p: unknown) => Promise<ApiTask>)({
         projectId,
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: desc.trim() || undefined,
         priority,
         dueDate: dueDate || undefined,
         assigneeEmails: assignees.map((a) => a.email),
-      } as any);
+      });
       toast.success('Task created!');
       onCreated(task);
     } catch {
       toast.error('Failed to create task');
-    } finally {
       setSaving(false);
     }
   };
 
   return (
     <motion.div
+      className="pp-modal-overlay"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="pp-modal"
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
         onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 460, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700 }}>New Task</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={16} /></button>
+        <div className="pp-modal-header">
+          <div className="pp-modal-title-row">
+            <span className="pp-modal-icon"><Sparkles size={16} /></span>
+            <h3 className="pp-modal-title">New Task</h3>
+          </div>
+          <button type="button" className="pp-modal-close" onClick={onClose}><X size={15} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Title */}
-          <input autoFocus className="input" placeholder="Task title *" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <form onSubmit={handleSubmit} className="pp-modal-form" noValidate>
+          <div className="pp-field">
+            <label className="pp-label" htmlFor="pp-task-title">Task title *</label>
+            <input id="pp-task-title" autoFocus className="pp-input" placeholder="What needs to be done?" value={title} onChange={(e) => setTitle(e.target.value)} />
+          </div>
 
-          {/* Description */}
-          <textarea
-            className="input" placeholder="Description (optional)" rows={2}
-            value={description} onChange={(e) => setDesc(e.target.value)}
-            style={{ resize: 'vertical', fontSize: 13 }}
-          />
+          <div className="pp-field">
+            <label className="pp-label" htmlFor="pp-task-desc">Description</label>
+            <textarea id="pp-task-desc" className="pp-input pp-textarea" placeholder="Add more detail…" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
+          </div>
 
-          {/* Priority */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Priority</label>
-              <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
-                <option value="low">🟢 Low</option>
-                <option value="medium">🔵 Medium</option>
-                <option value="high">🟠 High</option>
-                <option value="urgent">🔴 Urgent</option>
+          <div className="pp-field-row">
+            <div className="pp-field" style={{ flex: 1 }}>
+              <label className="pp-label" htmlFor="pp-task-pri">Priority</label>
+              <select id="pp-task-pri" className="pp-select" value={priority} onChange={(e) => setPriority(e.target.value as ApiTask['priority'])}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
               </select>
+            </div>
+            <div className="pp-field" style={{ flex: 1 }}>
+              <label className="pp-label" htmlFor="pp-task-due">Due date</label>
+              <input id="pp-task-due" type="date" className="pp-input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
           </div>
 
-          {/* Multi-Assignee — add by email */}
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Assignees</label>
-            <div style={{ display: 'flex', gap: 6 }}>
+          <div className="pp-field">
+            <label className="pp-label">Assignees</label>
+            <div className="pp-assignee-row">
               <input
-                className="input" placeholder="Add by email..."
+                className="pp-input" placeholder="Add by email…"
                 value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEmail())}
-                style={{ flex: 1, fontSize: 13 }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }}
+                style={{ flex: 1 }}
               />
-              <button type="button" className="btn btn-secondary" onClick={addEmail} style={{ flexShrink: 0, padding: '6px 12px' }} disabled={addingAssignee}>
-                {addingAssignee ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={13} />}
+              <button type="button" className="pp-add-btn" onClick={addEmail} disabled={adding}>
+                {adding ? <Loader2 size={13} className="pp-spin" /> : <Plus size={13} />}
               </button>
             </div>
             {assignees.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
-                {assignees.map((user) => (
-                  <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
-                    {user.full_name ?? user.email}
-                    <button type="button" onClick={() => removeEmail(user.email)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', padding: 0 }}>
-                      <X size={11} />
+              <div className="pp-assignee-chips">
+                {assignees.map((u) => (
+                  <span key={u.id} className="pp-chip">
+                    {u.full_name ?? u.email}
+                    <button type="button" className="pp-chip-remove" onClick={() => setAssignees((p) => p.filter((x) => x.id !== u.id))}>
+                      <X size={10} />
                     </button>
-                  </div>
+                  </span>
                 ))}
               </div>
             )}
-            {assigneeLookupError ? (
-              <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4 }}>{assigneeLookupError}</p>
-            ) : (
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Only registered users can be assigned</p>
-            )}
+            {lookupErr
+              ? <span className="pp-field-err">{lookupErr}</span>
+              : <span className="pp-field-hint">Only registered users can be assigned</span>
+            }
           </div>
 
-          {/* Due Date */}
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Due Date</label>
-            <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ padding: '7px 10px', fontSize: 13 }} />
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={saving || !title.trim()}>
-              {saving ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Creating...</> : 'Create Task'}
+          <div className="pp-modal-actions">
+            <button type="button" className="pp-cancel-btn" onClick={onClose}>Cancel</button>
+            <button type="submit" className="pp-submit-btn" disabled={saving || !title.trim()}>
+              {saving ? <><span className="pp-spinner" />Creating…</> : 'Create Task'}
             </button>
           </div>
         </form>
@@ -363,324 +380,44 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
   );
 }
 
-// ─── List View ────────────────────────────────────────────────────────────────
-
-const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> = {
-  todo: { bg: '#f3f4f6', color: '#6b7280', label: 'Pending' },
-  in_progress: { bg: '#dbeafe', color: '#2563eb', label: 'In Progress' },
-  in_review: { bg: '#fef3c7', color: '#f59e0b', label: 'In Review' },
-  done: { bg: '#dcfce7', color: '#22c55e', label: 'Completed' },
-  cancelled: { bg: '#fee2e2', color: '#ef4444', label: 'Cancelled' },
-};
-
-function ListView({ sections, tasks, onTaskClick, onAddTask }: any) {
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Kanban (3 columns)                                                          */
+/* ─────────────────────────────────────────────────────────────────────────── */
+function KanbanView({
+  tasks,
+  onTaskClick,
+  loadingTasks,
+}: {
+  tasks: KanbanTask[];
+  onTaskClick: (id: string) => void;
+  loadingTasks?: boolean;
+}) {
   return (
-    <div className="scroll-y" style={{ height: '100%', padding: '16px 20px', background: '#f8fafc' }}>
-      {/* Add Task Button - Centered in content area */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
-        <button 
-          onClick={onAddTask}
-          style={{ 
-            fontSize: 14, 
-            padding: '10px 24px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 8,
-            background: '#2563eb',
-            color: 'white',
-            border: 'none',
-            borderRadius: 8,
-            fontWeight: 600,
-            cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#1d4ed8';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = '0 4px 8px rgba(37, 99, 235, 0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#2563eb';
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 4px rgba(37, 99, 235, 0.2)';
-          }}
-        >
-          <Plus size={16} /> Add Task
-        </button>
-      </div>
-      
-      {sections.map((sec: any) => {
-        const secTasks = tasks.filter((t: any) => t.section_id === sec.id);
-        const isCollapsed = collapsed[sec.id];
-        return (
-          <div key={sec.id} style={{ marginBottom: 24 }}>
-            <button
-              onClick={() => setCollapsed((prev) => ({ ...prev, [sec.id]: !prev[sec.id] }))}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--font-display)' }}
-            >
-              {isCollapsed ? <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />}
-              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{sec.name}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', borderRadius: 99, padding: '1px 7px', border: '1px solid var(--border-subtle)' }}>{secTasks.length}</span>
-            </button>
-            <AnimatePresence>
-              {!isCollapsed && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  {secTasks.length === 0 ? (
-                    <div style={{ padding: '16px', textAlign: 'center', fontSize: 12.5, color: 'var(--text-muted)' }}>No tasks in this section</div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
-                      {secTasks.map((task: any) => (
-                        <ProjectTaskCard key={task.id} task={task} onClick={() => onTaskClick(task.id)} />
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ProjectTaskCard({ task, onClick }: { task: any; onClick: () => void }) {
-  const statusConfig = STATUS_COLORS[task.status] || STATUS_COLORS.todo;
-  const priorityConfig = PRIORITY_CONFIG[task.priority as Priority];
-  const progress = task.subtask_total > 0 
-    ? (task.subtask_done / task.subtask_total) * 100 
-    : task.status === 'done' ? 100 : 0;
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        background: 'white',
-        borderRadius: 12,
-        border: '1px solid #e5e7eb',
-        padding: 16,
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
-        e.currentTarget.style.transform = 'translateY(0)';
-      }}
-    >
-      {/* Header with Status and Priority */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{
-          background: statusConfig.bg,
-          color: statusConfig.color,
-          padding: '3px 10px',
-          borderRadius: 20,
-          fontSize: 10,
-          fontWeight: 600,
-          textTransform: 'capitalize',
-        }}>
-          {statusConfig.label}
-        </span>
-        <span style={{
-          background: priorityConfig?.bg || '#f3f4f6',
-          color: priorityConfig?.color || '#6b7280',
-          padding: '3px 10px',
-          borderRadius: 20,
-          fontSize: 10,
-          fontWeight: 600,
-        }}>
-          {priorityConfig?.label || task.priority} Priority
-        </span>
-      </div>
-
-      {/* Title */}
-      <h3 style={{
-        fontSize: 14,
-        fontWeight: 700,
-        color: '#111827',
-        marginBottom: 6,
-        lineHeight: 1.3,
-      }}>
-        {task.title}
-      </h3>
-
-      {/* Description */}
-      {task.description && (
-        <p style={{
-          fontSize: 12,
-          color: '#6b7280',
-          marginBottom: 12,
-          lineHeight: 1.4,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}>
-          {task.description}
-        </p>
-      )}
-
-      {/* Progress Section */}
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>
-            {task.subtask_done} / {task.subtask_total} done
-          </span>
-          <span style={{ fontSize: 11, color: '#6b7280' }}>
-            {Math.round(progress)}%
-          </span>
-        </div>
-        <div style={{
-          height: 5,
-          background: '#e5e7eb',
-          borderRadius: 3,
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            height: '100%',
-            width: `${progress}%`,
-            background: task.status === 'done' ? '#22c55e' : '#2563eb',
-            borderRadius: 3,
-            transition: 'width 0.3s',
-          }} />
-        </div>
-      </div>
-
-      {/* Due Date */}
-      {task.due_date && (
-        <div style={{ fontSize: 11, color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : '#6b7280', marginBottom: 10 }}>
-          Due: {formatDate(task.due_date)}
+    <div className="pp-kanban-root">
+      {loadingTasks && (
+        <div className="pp-kanban-loading">
+          <Loader2 size={18} className="pp-spin" />
+          <span>Loading tasks…</span>
         </div>
       )}
-
-      {/* Footer with Assignees */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          {(task.assignees ?? []).slice(0, 3).map((assignee: any, i: number) => (
-            <div
-              key={assignee.id}
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: '#e0e7ff',
-                color: '#4338ca',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 600,
-                border: '2px solid white',
-                marginLeft: i > 0 ? -6 : 0,
-                overflow: 'hidden',
-              }}
-              title={assignee.name || assignee.email}
-            >
-              {assignee.avatar_url ? (
-                <img src={assignee.avatar_url} alt="" style={{ width: 28, height: 28, objectFit: 'cover' }} />
-              ) : (
-                (assignee.name || assignee.email)?.[0]?.toUpperCase()
-              )}
-            </div>
-          ))}
-          {(task.assignees ?? []).length > 3 && (
-            <div style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: '#f3f4f6',
-              color: '#6b7280',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 10,
-              fontWeight: 600,
-              border: '2px solid white',
-              marginLeft: -6,
-            }}>
-              +{(task.assignees ?? []).length - 3}
-            </div>
-          )}
-        </div>
-
-        {/* Comment & Attachment Icons */}
-        <div style={{ display: 'flex', gap: 12, color: '#9ca3af' }}>
-          {task.comment_count > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <MessageSquare size={12} />
-              <span style={{ fontSize: 11 }}>{task.comment_count}</span>
-            </div>
-          )}
-          {task.attachment_count > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-              <Paperclip size={12} />
-              <span style={{ fontSize: 11 }}>{task.attachment_count}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Calendar View ────────────────────────────────────────────────────────────
-
-function CalendarView({ tasks, onTaskClick }: any) {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthName = today.toLocaleString('default', { month: 'long', year: 'numeric' });
-
-  const tasksByDay: Record<number, any[]> = {};
-  tasks.forEach((task: any) => {
-    if (task.due_date) {
-      const d = new Date(task.due_date);
-      if (d.getMonth() === month && d.getFullYear() === year) {
-        const day = d.getDate();
-        if (!tasksByDay[day]) tasksByDay[day] = [];
-        tasksByDay[day].push(task);
-      }
-    }
-  });
-
-  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-  const blanks = Array.from({ length: firstDay }, (_, i) => i);
-
-  return (
-    <div className="scroll-y" style={{ height: '100%', padding: '20px' }}>
-      <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, color: 'var(--text-primary)' }}>{monthName}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
-        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-          <div key={d} style={{ padding: '6px 8px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{d}</div>
-        ))}
-        {blanks.map((b) => <div key={`blank-${b}`} />)}
-        {days.map((day) => {
-          const dayTasks = tasksByDay[day] || [];
-          const isToday = day === today.getDate();
+      <div className="pp-kanban-columns">
+        {KANBAN_COLUMNS.map((col) => {
+          const colTasks = tasks.filter(col.match);
           return (
-            <div key={day} style={{ minHeight: 80, padding: '6px 8px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
-              <span style={{ fontSize: 12, fontWeight: isToday ? 800 : 500, color: isToday ? 'white' : 'var(--text-secondary)', background: isToday ? 'var(--accent)' : 'transparent', borderRadius: '50%', width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-                {day}
-              </span>
-              {dayTasks.slice(0, 2).map((task: any) => (
-                <div
-                  key={task.id}
-                  onClick={() => onTaskClick(task.id)}
-                  style={{ marginTop: 3, padding: '1px 5px', borderRadius: 3, background: (PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280') + '20', borderLeft: `2px solid ${PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280'}`, fontSize: 10.5, color: 'var(--text-primary)', cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontWeight: 500 }}
-                >
-                  {task.title}
-                </div>
-              ))}
-              {dayTasks.length > 2 && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, display: 'block' }}>+{dayTasks.length - 2} more</span>}
+            <div key={col.key} className="pp-kanban-col">
+              <div className="pp-kanban-col-head">
+                <span className="pp-kanban-col-title">{col.label}</span>
+                <span className="pp-kanban-col-count">{colTasks.length}</span>
+              </div>
+              <div className="pp-kanban-col-body">
+                {colTasks.length === 0 ? (
+                  <div className="pp-kanban-empty">No tasks</div>
+                ) : (
+                  colTasks.map((task) => (
+                    <KanbanCardCompact key={task.id} task={task} onClick={() => onTaskClick(task.id)} />
+                  ))
+                )}
+              </div>
             </div>
           );
         })}
@@ -689,31 +426,167 @@ function CalendarView({ tasks, onTaskClick }: any) {
   );
 }
 
-// ─── Overview Tab ─────────────────────────────────────────────────────────────
+function KanbanCardCompact({ task, onClick }: { task: KanbanTask; onClick: () => void }) {
+  const ps = PRIORITY_STYLE[task.priority] ?? PRIORITY_STYLE.low;
+  const overdueFlag = isOverdue(task.due_date ?? undefined);
 
-const PIE_COLORS = ['#22c55e', '#6366f1', '#f59e0b', '#ef4444'];
+  return (
+    <div
+      className="pp-kanban-card"
+      onClick={onClick}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
+      role="button"
+      tabIndex={0}
+    >
+      <span className="pp-kanban-card-stripe" style={{ background: ps.stripe }} />
+      <div className="pp-kanban-card-inner">
+        <div className="pp-kanban-card-top">
+          <h3 className="pp-kanban-card-title">{task.title}</h3>
+          <span
+            className="pp-kanban-pri"
+            style={
+              {
+                color: ps.color,
+                background: ps.bg,
+                border: `1px solid ${ps.border}`,
+              } as CSSProperties
+            }
+          >
+            {task.priority}
+          </span>
+        </div>
+        {task.due_date && (
+          <div className={`pp-kanban-due${overdueFlag ? ' overdue' : ''}`}>
+            {overdueFlag && <AlertTriangle size={11} />}
+            {formatDate(task.due_date)}
+          </div>
+        )}
+        <div className="pp-kanban-card-foot">
+          <div className="pp-avatar-stack pp-kanban-avatars">
+            {task.assignees.slice(0, 3).map((a, i) => (
+              <span key={a.id} className="pp-avatar" title={a.name || a.email} style={{ zIndex: 10 - i }}>
+                {a.avatar_url ? (
+                  <img src={a.avatar_url} alt="" />
+                ) : (
+                  (a.name || a.email)?.[0]?.toUpperCase()
+                )}
+              </span>
+            ))}
+            {task.assignees.length > 3 && (
+              <span className="pp-avatar pp-avatar-overflow">+{task.assignees.length - 3}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Calendar View                                                               */
+/* ─────────────────────────────────────────────────────────────────────────── */
+function CalendarView({ tasks, onTaskClick }: { tasks: KanbanTask[]; onTaskClick: (id: string) => void }) {
+  const [cursor, setCursor] = useState(() => new Date());
+  const today = new Date();
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthName = cursor.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  const tasksByDay: Record<number, KanbanTask[]> = {};
+  tasks.forEach((t) => {
+    if (!t.due_date) return;
+    const d = new Date(t.due_date);
+    if (d.getMonth() !== month || d.getFullYear() !== year) return;
+    const day = d.getDate();
+    if (!tasksByDay[day]) tasksByDay[day] = [];
+    tasksByDay[day].push(t);
+  });
+
+  return (
+    <div className="pp-cal-wrap">
+      <div className="pp-cal-nav">
+        <button type="button" className="pp-cal-nav-btn" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label="Previous month">
+          <ChevronLeft size={18} />
+        </button>
+        <h2 className="pp-cal-title">{monthName}</h2>
+        <button type="button" className="pp-cal-nav-btn" onClick={() => setCursor(new Date(year, month + 1, 1))} aria-label="Next month">
+          <ChevronRight size={18} />
+        </button>
+      </div>
+      <div className="pp-cal-grid">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+          <div key={d} className="pp-cal-day-label">{d}</div>
+        ))}
+        {Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} />)}
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+          const dayTasks = tasksByDay[day] ?? [];
+          const isToday =
+            day === today.getDate() &&
+            month === today.getMonth() &&
+            year === today.getFullYear();
+          return (
+            <div key={day} className={`pp-cal-cell${isToday ? ' today' : ''}${dayTasks.length ? ' has-tasks' : ''}`}>
+              <div className="pp-cal-day-row">
+                <span className={`pp-cal-day-num${isToday ? ' today-num' : ''}`}>{day}</span>
+                {dayTasks.length > 0 && <span className="pp-cal-dot" title={`${dayTasks.length} task(s)`} />}
+              </div>
+              {dayTasks.slice(0, 2).map((t) => {
+                const ps = PRIORITY_STYLE[t.priority] ?? PRIORITY_STYLE.low;
+                return (
+                  <div
+                    key={t.id}
+                    className="pp-cal-task"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTaskClick(t.id);
+                    }}
+                    style={
+                      {
+                        borderLeftColor: ps.stripe,
+                        background: ps.bg,
+                        color: ps.color,
+                      } as CSSProperties
+                    }
+                  >
+                    {t.title}
+                  </div>
+                );
+              })}
+              {dayTasks.length > 2 && <span className="pp-cal-more">+{dayTasks.length - 2} more</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+/*  Overview View                                                               */
+/* ─────────────────────────────────────────────────────────────────────────── */
 function OverviewView({ tasks }: { tasks: ApiTask[] }) {
   const byStatus = [
     { name: 'Done', count: tasks.filter((t) => t.status === 'done').length },
     { name: 'In Progress', count: tasks.filter((t) => t.status === 'in_progress').length },
     { name: 'To Do', count: tasks.filter((t) => t.status === 'todo').length },
+    /* Fix 5: due_date ?? undefined to satisfy isOverdue's param type */
     { name: 'Overdue', count: tasks.filter((t) => isOverdue(t.due_date ?? undefined)).length },
   ];
-
   const byPriority = [
-    { name: 'Urgent', count: tasks.filter((t) => t.priority === 'urgent').length, color: '#ef4444' },
-    { name: 'High', count: tasks.filter((t) => t.priority === 'high').length, color: '#f97316' },
-    { name: 'Medium', count: tasks.filter((t) => t.priority === 'medium').length, color: '#3b82f6' },
-    { name: 'Low', count: tasks.filter((t) => t.priority === 'low').length, color: '#6b7280' },
+    { name: 'Urgent', count: tasks.filter((t) => t.priority === 'urgent').length, color: '#dc2626' },
+    { name: 'High', count: tasks.filter((t) => t.priority === 'high').length, color: '#ea580c' },
+    { name: 'Medium', count: tasks.filter((t) => t.priority === 'medium').length, color: '#2563eb' },
+    { name: 'Low', count: tasks.filter((t) => t.priority === 'low').length, color: '#64748b' },
   ];
 
   return (
-    <div className="scroll-y" style={{ height: '100%', padding: '20px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <div className="card" style={{ padding: '18px' }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Status Breakdown</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+    <div className="pp-overview-wrap">
+      <div className="pp-overview-charts">
+        <div className="pp-chart-card">
+          <h3 className="pp-chart-title">Status Breakdown</h3>
+          <div className="pp-pie-row">
             <ResponsiveContainer width={120} height={120}>
               <PieChart>
                 <Pie data={byStatus} dataKey="count" cx="50%" cy="50%" innerRadius={35} outerRadius={55} strokeWidth={0}>
@@ -721,42 +594,238 @@ function OverviewView({ tasks }: { tasks: ApiTask[] }) {
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="pp-pie-legend">
               {byStatus.map((s, i) => (
-                <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: PIE_COLORS[i] }} />
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{s.name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, marginLeft: 'auto', color: 'var(--text-primary)' }}>{s.count}</span>
+                <div key={s.name} className="pp-legend-item">
+                  <span className="pp-legend-dot" style={{ background: PIE_COLORS[i] }} />
+                  <span className="pp-legend-name">{s.name}</span>
+                  <span className="pp-legend-val">{s.count}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
-        <div className="card" style={{ padding: '18px' }}>
-          <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Priority Distribution</h3>
+
+        <div className="pp-chart-card">
+          <h3 className="pp-chart-title">Priority Distribution</h3>
           <ResponsiveContainer width="100%" height={120}>
             <BarChart data={byPriority} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <XAxis dataKey="name" style={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-              <YAxis style={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 6, fontSize: 12, color: 'var(--text-primary)' }} cursor={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--pp-muted)' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--pp-muted)' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: 'var(--pp-surface)', border: '1px solid var(--pp-border2)', borderRadius: 8, fontSize: 12 }} cursor={false} />
               <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {byPriority.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                {byPriority.map((e, i) => <Cell key={i} fill={e.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
-      <div className="card" style={{ padding: '18px' }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Task Summary</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-          {byStatus.map((s, i) => (
-            <div key={s.name} style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-elevated)', borderRadius: 'var(--radius)' }}>
-              <div style={{ fontSize: 24, fontWeight: 800, color: PIE_COLORS[i], letterSpacing: '-0.03em' }}>{s.count}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>{s.name}</div>
-            </div>
-          ))}
-        </div>
+
+      {/* Fix 6: No CSS custom props (--tile-color) on JSX elements — use borderTopColor + color inline */}
+      <div className="pp-summary-tiles">
+        {byStatus.map((s, i) => (
+          <div key={s.name} className="pp-summary-tile"
+            style={{ borderTopColor: PIE_COLORS[i] } as CSSProperties}>
+            <span className="pp-tile-val" style={{ color: PIE_COLORS[i] } as CSSProperties}>
+              {s.count}
+            </span>
+            <span className="pp-tile-label">{s.name}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+const CSS = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+.pp-root {
+  --pp-font:      'Plus Jakarta Sans','Inter',sans-serif;
+  --pp-bg:        #f0f4f8;
+  --pp-surface:   #ffffff;
+  --pp-elev:      #f7f9fc;
+  --pp-overlay:   #eef2f7;
+  --pp-txt:       #0f172a;
+  --pp-txt2:      #475569;
+  --pp-muted:     #94a3b8;
+  --pp-border:    rgba(15,23,42,0.08);
+  --pp-border2:   rgba(15,23,42,0.14);
+  --pp-border3:   rgba(15,23,42,0.24);
+  --pp-accent:    #2563eb;
+  --pp-acc-soft:  rgba(37,99,235,0.10);
+  --pp-radius:    10px;
+  --pp-radius-sm: 6px;
+  --pp-shadow:    0 1px 4px rgba(15,23,42,0.10);
+  --pp-shadow-md: 0 4px 16px rgba(15,23,42,0.10);
+  --pp-glow:      0 0 0 3px rgba(37,99,235,0.18);
+  --pp-t:         150ms cubic-bezier(.4,0,.2,1);
+  display: flex; flex-direction: column;
+  height: 100%; overflow: hidden;
+  font-family: var(--pp-font);
+  background: var(--pp-bg); color: var(--pp-txt);
+  position: relative;
+}
+html.dark .pp-root {
+  --pp-bg:        #0b1120;
+  --pp-surface:   #111827;
+  --pp-elev:      #1c2333;
+  --pp-overlay:   #243049;
+  --pp-txt:       #f1f5f9;
+  --pp-txt2:      #94a3b8;
+  --pp-muted:     #64748b;
+  --pp-border:    rgba(255,255,255,0.06);
+  --pp-border2:   rgba(255,255,255,0.12);
+  --pp-border3:   rgba(255,255,255,0.22);
+  --pp-accent:    #3b82f6;
+  --pp-acc-soft:  rgba(59,130,246,0.12);
+  --pp-shadow:    0 1px 4px rgba(0,0,0,0.40);
+  --pp-shadow-md: 0 4px 16px rgba(0,0,0,0.36);
+  --pp-glow:      0 0 0 3px rgba(59,130,246,0.25);
+}
+.pp-loader { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px; color: var(--pp-muted); font-family: var(--pp-font); }
+.pp-spin { animation: pp-spin 1s linear infinite; }
+@keyframes pp-spin { to { transform: rotate(360deg); } }
+.pp-view-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 0 20px; background: var(--pp-surface);
+  border-bottom: 1px solid var(--pp-border); flex-shrink: 0;
+}
+.pp-view-tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; }
+.pp-view-tab {
+  display: flex; align-items: center; gap: 5px; padding: 12px 14px;
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  color: var(--pp-muted); font-size: 12.5px; font-weight: 600;
+  font-family: var(--pp-font); cursor: pointer; transition: all var(--pp-t);
+  white-space: nowrap; flex-shrink: 0;
+}
+.pp-view-tab:hover { color: var(--pp-txt); }
+.pp-view-tab.active { color: var(--pp-accent); border-bottom-color: var(--pp-accent); }
+.pp-add-task-bar-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px;
+  background: var(--pp-accent); color: white; border: none;
+  border-radius: var(--pp-radius-sm); font-size: 13px; font-weight: 700;
+  font-family: var(--pp-font); cursor: pointer; flex-shrink: 0;
+  box-shadow: 0 2px 10px rgba(37,99,235,0.22); transition: all var(--pp-t);
+}
+.pp-add-task-bar-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.pp-content { flex: 1; overflow: hidden; min-height: 0; }
+.pp-kanban-root { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--pp-bg); }
+.pp-kanban-loading {
+  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--pp-muted); background: rgba(240,244,248,0.72); font-family: var(--pp-font);
+}
+html.dark .pp-kanban-loading { background: rgba(11,17,32,0.72); }
+.pp-kanban-columns { display: flex; gap: 14px; padding: 16px 20px; flex: 1; min-height: 0; overflow-x: auto; align-items: stretch; }
+.pp-kanban-col {
+  flex: 1; min-width: 240px; max-width: 420px; display: flex; flex-direction: column;
+  background: var(--pp-elev); border: 1px solid var(--pp-border); border-radius: var(--pp-radius);
+  overflow: hidden;
+}
+.pp-kanban-col-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; border-bottom: 1px solid var(--pp-border); background: var(--pp-surface); flex-shrink: 0;
+}
+.pp-kanban-col-title { font-size: 12.5px; font-weight: 800; color: var(--pp-txt); letter-spacing: 0.02em; text-transform: uppercase; }
+.pp-kanban-col-count {
+  font-size: 11px; font-weight: 700; color: var(--pp-accent); background: var(--pp-acc-soft);
+  border-radius: 99px; padding: 2px 8px; min-width: 22px; text-align: center;
+}
+.pp-kanban-col-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.pp-kanban-empty { font-size: 12px; color: var(--pp-muted); text-align: center; padding: 20px 8px; }
+.pp-kanban-card {
+  display: flex; overflow: hidden; background: var(--pp-surface);
+  border: 1px solid var(--pp-border); border-radius: var(--pp-radius-sm);
+  cursor: pointer; box-shadow: var(--pp-shadow); transition: all var(--pp-t); outline: none;
+}
+.pp-kanban-card:hover { border-color: var(--pp-border2); box-shadow: var(--pp-shadow-md); transform: translateY(-1px); }
+.pp-kanban-card:focus-visible { outline: 2px solid var(--pp-accent); outline-offset: 2px; }
+.pp-kanban-card-stripe { width: 3px; flex-shrink: 0; display: block; }
+.pp-kanban-card-inner { flex: 1; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pp-kanban-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.pp-kanban-card-title { font-size: 13px; font-weight: 700; color: var(--pp-txt); line-height: 1.35; margin: 0; flex: 1; min-width: 0; }
+.pp-kanban-pri { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 99px; flex-shrink: 0; }
+.pp-kanban-due { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--pp-txt2); }
+.pp-kanban-due.overdue { color: #dc2626; }
+.pp-kanban-card-foot { padding-top: 4px; border-top: 1px solid var(--pp-border); }
+.pp-kanban-avatars .pp-avatar { width: 22px; height: 22px; font-size: 9px; }
+.pp-avatar-stack { display: flex; }
+.pp-avatar { width: 25px; height: 25px; border-radius: 50%; background: var(--pp-acc-soft); color: var(--pp-accent); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid var(--pp-surface); margin-left: -6px; overflow: hidden; flex-shrink: 0; }
+.pp-avatar:first-child { margin-left: 0; }
+.pp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.pp-avatar-overflow { background: var(--pp-overlay); color: var(--pp-muted); font-size: 9px; }
+.pp-cal-wrap { height: 100%; overflow-y: auto; padding: 20px; background: var(--pp-bg); }
+.pp-cal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+.pp-cal-nav-btn {
+  width: 36px; height: 36px; border-radius: var(--pp-radius-sm); border: 1px solid var(--pp-border2);
+  background: var(--pp-surface); color: var(--pp-txt2); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all var(--pp-t);
+}
+.pp-cal-nav-btn:hover { border-color: var(--pp-accent); color: var(--pp-accent); background: var(--pp-acc-soft); }
+.pp-cal-title { font-size: 16px; font-weight: 800; color: var(--pp-txt); margin: 0; flex: 1; text-align: center; }
+.pp-cal-day-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px; }
+.pp-cal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--pp-accent); flex-shrink: 0; opacity: 0.85; }
+.pp-cal-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 2px; }
+.pp-cal-day-label { padding: 6px 8px; font-size: 11px; font-weight: 700; color: var(--pp-muted); text-align: center; text-transform: uppercase; letter-spacing: 0.05em; }
+.pp-cal-cell { min-height: 80px; padding: 6px 7px; background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: var(--pp-radius-sm); }
+.pp-cal-cell.today { border-color: var(--pp-accent); }
+.pp-cal-day-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 500; color: var(--pp-txt2); margin-bottom: 4px; }
+.pp-cal-day-num.today-num { background: var(--pp-accent); color: white; font-weight: 800; }
+.pp-cal-task { padding: 2px 5px; border-radius: 3px; border-left: 2px solid transparent; font-size: 10.5px; font-weight: 500; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-bottom: 2px; transition: opacity var(--pp-t); }
+.pp-cal-task:hover { opacity: 0.8; }
+.pp-cal-more { font-size: 10px; color: var(--pp-muted); display: block; margin-top: 2px; }
+.pp-overview-wrap { height: 100%; overflow-y: auto; padding: 20px; background: var(--pp-bg); }
+.pp-overview-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.pp-chart-card { background: var(--pp-surface); border: 1px solid var(--pp-border); border-radius: var(--pp-radius); padding: 18px; box-shadow: var(--pp-shadow); }
+.pp-chart-title { font-size: 13px; font-weight: 700; color: var(--pp-txt); margin-bottom: 14px; }
+.pp-pie-row { display: flex; align-items: center; gap: 20px; }
+.pp-pie-legend { display: flex; flex-direction: column; gap: 8px; }
+.pp-legend-item { display: flex; align-items: center; gap: 7px; }
+.pp-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: block; }
+.pp-legend-name { font-size: 12px; color: var(--pp-txt2); flex: 1; }
+.pp-legend-val   { font-size: 12px; font-weight: 700; color: var(--pp-txt); }
+.pp-summary-tiles { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+.pp-summary-tile { background: var(--pp-surface); border: 1px solid var(--pp-border); border-top: 3px solid transparent; border-radius: var(--pp-radius); padding: 16px; display: flex; flex-direction: column; gap: 4px; box-shadow: var(--pp-shadow); transition: transform var(--pp-t),box-shadow var(--pp-t); }
+.pp-summary-tile:hover { transform: translateY(-2px); box-shadow: var(--pp-shadow-md); }
+.pp-tile-val { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; font-family: var(--pp-font); }
+.pp-tile-label { font-size: 11.5px; color: var(--pp-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.pp-modal-overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,0.45); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.pp-modal { background: var(--pp-surface); border: 1px solid var(--pp-border2); border-radius: 14px; width: 480px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+.pp-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--pp-border); position: sticky; top: 0; background: var(--pp-surface); z-index: 1; }
+.pp-modal-title-row { display: flex; align-items: center; gap: 10px; }
+.pp-modal-icon { width: 32px; height: 32px; border-radius: var(--pp-radius-sm); background: var(--pp-acc-soft); color: var(--pp-accent); display: flex; align-items: center; justify-content: center; }
+.pp-modal-title { font-size: 15px; font-weight: 700; color: var(--pp-txt); margin: 0; }
+.pp-modal-close { width: 30px; height: 30px; border-radius: var(--pp-radius-sm); background: transparent; border: none; color: var(--pp-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--pp-t); }
+.pp-modal-close:hover { background: var(--pp-overlay); color: var(--pp-txt); }
+.pp-modal-form { display: flex; flex-direction: column; gap: 18px; padding: 22px; }
+.pp-field { display: flex; flex-direction: column; gap: 6px; }
+.pp-field-row { display: flex; gap: 12px; }
+.pp-label { font-size: 11.5px; font-weight: 700; color: var(--pp-txt2); text-transform: uppercase; letter-spacing: 0.07em; }
+.pp-input { background: var(--pp-elev); border: 1.5px solid var(--pp-border2); border-radius: var(--pp-radius-sm); color: var(--pp-txt); font-family: var(--pp-font); font-size: 14px; font-weight: 500; padding: 11px 13px; outline: none; width: 100%; transition: border-color var(--pp-t),box-shadow var(--pp-t); -webkit-appearance: none; }
+.pp-input::placeholder { color: var(--pp-muted); font-weight: 400; }
+.pp-input:focus { border-color: var(--pp-accent); box-shadow: var(--pp-glow); background: var(--pp-surface); }
+.pp-input:hover:not(:focus) { border-color: var(--pp-border3); }
+.pp-textarea { resize: vertical; min-height: 72px; }
+.pp-select { background: var(--pp-elev); border: 1.5px solid var(--pp-border2); border-radius: var(--pp-radius-sm); color: var(--pp-txt); font-family: var(--pp-font); font-size: 13.5px; font-weight: 500; padding: 11px 28px 11px 12px; outline: none; cursor: pointer; width: 100%; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; transition: border-color var(--pp-t); }
+.pp-select:focus { border-color: var(--pp-accent); box-shadow: var(--pp-glow); }
+.pp-assignee-row { display: flex; gap: 8px; }
+.pp-add-btn { width: 42px; height: 42px; flex-shrink: 0; background: var(--pp-elev); border: 1.5px solid var(--pp-border2); border-radius: var(--pp-radius-sm); color: var(--pp-txt2); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all var(--pp-t); }
+.pp-add-btn:hover:not(:disabled) { background: var(--pp-acc-soft); border-color: var(--pp-accent); color: var(--pp-accent); }
+.pp-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pp-assignee-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pp-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--pp-acc-soft); color: var(--pp-accent); border-radius: 99px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+.pp-chip-remove { background: none; border: none; cursor: pointer; color: inherit; display: flex; padding: 0; opacity: 0.7; transition: opacity var(--pp-t); }
+.pp-chip-remove:hover { opacity: 1; }
+.pp-field-err  { font-size: 12px; color: #dc2626; font-weight: 600; }
+.pp-field-hint { font-size: 12px; color: var(--pp-muted); }
+.pp-modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+.pp-cancel-btn { padding: 10px 18px; background: var(--pp-elev); border: 1px solid var(--pp-border2); border-radius: var(--pp-radius-sm); color: var(--pp-txt2); font-size: 13.5px; font-weight: 600; font-family: var(--pp-font); cursor: pointer; transition: all var(--pp-t); }
+.pp-cancel-btn:hover { background: var(--pp-overlay); border-color: var(--pp-border3); }
+.pp-submit-btn { display: flex; align-items: center; gap: 7px; padding: 10px 20px; background: var(--pp-accent); color: white; border: none; border-radius: var(--pp-radius-sm); font-size: 13.5px; font-weight: 700; font-family: var(--pp-font); cursor: pointer; transition: all var(--pp-t); }
+.pp-submit-btn:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 3px 12px rgba(37,99,235,0.30); }
+.pp-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.pp-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: pp-spin 0.65s linear infinite; }
+@media (max-width: 768px) { .pp-overview-charts{grid-template-columns:1fr} .pp-summary-tiles{grid-template-columns:repeat(2,1fr)} .pp-field-row{flex-direction:column} .pp-kanban-columns{flex-direction:column; align-items:stretch} .pp-kanban-col{max-width:none; min-width:0} }
+@media (max-width: 480px) { .pp-modal{border-radius:12px} .pp-modal-form{padding:16px} .pp-summary-tiles{grid-template-columns:repeat(2,1fr);gap:8px} .pp-input,.pp-select{font-size:16px} }
+`;

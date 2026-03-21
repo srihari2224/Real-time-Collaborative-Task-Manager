@@ -247,6 +247,11 @@ h1,h2,h3,h4,h5,h6 {
   overflow: hidden;
 }
 .sidebar-nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.sidebar-nav-item.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
 .sidebar-nav-item.active {
   background: var(--accent-soft);
   color: var(--accent);
