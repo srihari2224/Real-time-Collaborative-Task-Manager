@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
 import { env } from './config/env.js';
 import authRoutes      from './routes/auth.js';
+import googleAuthRoutes from './routes/googleAuth.js';
 import workspaceRoutes from './routes/workspaces.js';
 import projectRoutes   from './routes/projects.js';
 import taskRoutes      from './routes/tasks.js';
@@ -69,6 +70,7 @@ export const buildApp = async () => {
   // Routes
   const prefix = `/api/${env.node.apiVersion}`;
   await app.register(authRoutes,         { prefix: `${prefix}/auth` });
+  await app.register(googleAuthRoutes,   { prefix: `${prefix}/auth/google` });
   await app.register(userRoutes,         { prefix: `${prefix}/users` });
   await app.register(workspaceRoutes,    { prefix: `${prefix}/workspaces` });
   await app.register(projectRoutes,      { prefix: `${prefix}/projects` });

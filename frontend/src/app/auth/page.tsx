@@ -14,6 +14,8 @@ import { useAuthStore } from '@/stores/authStore';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 import api from '@/lib/api';
+import { signInWithGoogle } from '@/lib/googleAuth';
+
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -49,7 +51,7 @@ function AuthContent() {
   const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setUser, setToken, setSession } = useAuthStore();
+  const { setUser, setToken, setSession, setGoogleUser } = useAuthStore();
 
   const loginForm = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
   const signupForm = useForm<SignupForm>({ resolver: zodResolver(signupSchema) });
@@ -61,8 +63,20 @@ function AuthContent() {
     }
   }, [searchParams]);
 
-  // If already logged in (session exists), redirect away
+  // If already logged in (Supabase session OR persisted Google user), redirect away
   useEffect(() => {
+    // Check Google user first (persisted in localStorage via zustand)
+    const stored = localStorage.getItem('taskflow-auth');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.state?.googleUser && parsed?.state?.token) {
+          router.replace('/');
+          return;
+        }
+      } catch { /* ignore */ }
+    }
+    // Check Supabase session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         router.replace('/');
@@ -114,16 +128,27 @@ function AuthContent() {
     router.replace('/');
   };
 
-  const handleGoogleSSO = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: { access_type: 'offline', prompt: 'consent' },
-      },
-    });
-    if (error) {
-      toast.error(error.message);
+  const handleGoogleLogin = async () => {
+    try {
+      toast.loading('Opening Google Sign-In...', { id: 'google-login' });
+      // Step 1: Open the Google Identity Services popup
+      const { credential, user: googleUser } = await signInWithGoogle();
+
+      // Step 2: Send the Google ID token to our backend for verification & user upsert
+      const res = await api.post('/api/v1/auth/google', { credential });
+      const backendUser = res.data?.data ?? res.data;
+
+      // Step 3: Store everything in the auth store
+      setToken(credential);              // Google ID token used as Bearer token for API calls
+      setGoogleUser(googleUser);         // Store Google profile (name, email, picture)
+      setUser(backendUser);              // Store the backend user record
+
+      toast.success(`Welcome, ${googleUser.name ?? googleUser.email}!`, { id: 'google-login' });
+      router.replace('/');
+    } catch (err: any) {
+      toast.dismiss('google-login');
+      const msg = err?.response?.data?.message ?? err?.message ?? 'Google Sign-In failed';
+      toast.error(msg);
     }
   };
 
@@ -290,7 +315,7 @@ function AuthContent() {
                 <div className="auth-divider"><span>or continue with</span></div>
 
                 {/* Google */}
-                <GoogleBtn onClick={handleGoogleSSO} />
+                <GoogleBtn onClick={handleGoogleLogin} />
                 <p className="auth-google-note">This uses Google OAuth 2.0 authentication.</p>
               </motion.form>
             ) : (
@@ -359,7 +384,7 @@ function AuthContent() {
                 <div className="auth-divider"><span>or continue with</span></div>
 
                 {/* Google */}
-                <GoogleBtn onClick={handleGoogleSSO} />
+                <GoogleBtn onClick={handleGoogleLogin} />
                 <p className="auth-google-note">This uses Google OAuth 2.0 authentication.</p>
               </motion.form>
             )}

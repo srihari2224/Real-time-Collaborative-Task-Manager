@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import { Providers } from '@/components/Providers';
 
@@ -14,9 +15,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        {/* Google Identity Services — required for direct Google OAuth */}
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="beforeInteractive"
+        />
         <div className="noise-overlay" aria-hidden="true" />
         <Providers>{children}</Providers>
       </body>
     </html>
   );
 }
+
