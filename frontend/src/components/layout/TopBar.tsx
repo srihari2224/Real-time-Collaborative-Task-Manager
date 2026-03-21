@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { Sun, Moon, Bell } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
@@ -16,21 +16,22 @@ interface TopBarProps {
 export function TopBar({ title, actions }: TopBarProps) {
   const { theme, toggleTheme } = useUIStore();
   const user = useAuthStore((s) => s.user);
-  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     notificationsApi
       .list()
       .then(({ unread_count, notifications }) => {
-        setUnread(unread_count || notifications.filter((n) => !n.is_read).length);
+        const count = unread_count || notifications.filter((n) => !n.is_read).length;
+        if (count > 0) document.documentElement.setAttribute('data-unread', 'true');
+        else document.documentElement.removeAttribute('data-unread');
       })
-      .catch(() => setUnread(0));
+      .catch(() => {});
   }, []);
 
-  const displayName = (user as { full_name?: string; name?: string } | null)?.full_name
-    ?? (user as { name?: string } | null)?.name
-    ?? '';
-  const avatarUrl = (user as { avatar_url?: string | null } | null)?.avatar_url;
+  const displayName =
+    (user as { full_name?: string } | null)?.full_name ??
+    (user as { name?: string } | null)?.name ??
+    '';
 
   return (
     <div className="topbar">
@@ -39,37 +40,32 @@ export function TopBar({ title, actions }: TopBarProps) {
       <div className="topbar-actions">
         {actions}
 
+        {/* Theme toggle */}
         <button
           type="button"
           onClick={toggleTheme}
-          title="Toggle theme"
+          title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
           className="topbar-icon-btn"
+          aria-label="Toggle theme"
         >
-          {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          {theme === 'dark'
+            ? <Sun size={15} strokeWidth={1.8} />
+            : <Moon size={15} strokeWidth={1.8} />}
         </button>
 
-        <Link
-          href="/inbox"
-          className="topbar-icon-btn topbar-bell"
-          style={{ textDecoration: 'none' }}
-          title="Notifications"
-        >
-          <Bell size={15} />
-          {unread > 0 && <span className="topbar-badge" />}
+        {/* Bell — blue when there are unread notifications */}
+        <Link href="/inbox" className="topbar-icon-btn topbar-bell" title="Notifications">
+          <Bell size={15} strokeWidth={1.8} />
         </Link>
 
+        {/* User initials chip — links to settings */}
         <Link
           href="/settings"
-          className="topbar-avatar-link"
+          className="topbar-user-chip"
           title="Settings"
+          aria-label="Go to settings"
         >
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="topbar-avatar-img" />
-          ) : (
-            <span className="topbar-avatar-fallback">
-              {user ? getInitials(displayName || user.email || 'U') : 'U'}
-            </span>
-          )}
+          {getInitials(displayName || user?.email || 'U')}
         </Link>
       </div>
 
@@ -77,19 +73,23 @@ export function TopBar({ title, actions }: TopBarProps) {
         .topbar {
           display: flex;
           align-items: center;
-          gap: 12px;
+          gap: 6px;
           padding: 0 20px;
           height: 52px;
           flex-shrink: 0;
           border-bottom: 1px solid var(--border-subtle);
           background: var(--bg-surface);
+          position: sticky;
+          top: 0;
+          z-index: 50;
         }
 
         .topbar-title {
-          font-size: 15px;
+          font-size: 11px;
           font-weight: 700;
-          color: var(--text-primary);
-          letter-spacing: -0.025em;
+          color: var(--text-secondary);
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
           margin: 0;
           margin-right: auto;
           line-height: 1;
@@ -97,20 +97,20 @@ export function TopBar({ title, actions }: TopBarProps) {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          font-family: var(--font-mono, 'Space Mono', monospace);
         }
 
         .topbar-actions {
           margin-left: auto;
           display: flex;
           align-items: center;
-          gap: 6px;
+          gap: 4px;
           flex-shrink: 0;
         }
 
         .topbar-icon-btn {
-          width: 36px;
-          height: 36px;
-          border-radius: var(--radius);
+          width: 34px;
+          height: 34px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -118,71 +118,43 @@ export function TopBar({ title, actions }: TopBarProps) {
           border: none;
           color: var(--text-muted);
           cursor: pointer;
-          transition: all var(--transition);
-          position: relative;
+          transition: background 150ms ease, color 150ms ease;
+          text-decoration: none;
+          border-radius: 0;
         }
         .topbar-icon-btn:hover {
           background: var(--bg-hover);
           color: var(--text-primary);
         }
 
-        .topbar-bell {
-          color: var(--text-muted);
-        }
-
-        .topbar-badge {
-          position: absolute;
-          top: 6px;
-          right: 6px;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background: var(--accent);
-          border: 2px solid var(--bg-surface);
-          animation: badge-pulse 2s infinite;
-        }
-
-        @keyframes badge-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0.4); }
-          50% { box-shadow: 0 0 0 4px rgba(37,99,235,0); }
-        }
-
-        .topbar-avatar-link {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          overflow: hidden;
-          flex-shrink: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid var(--border-default);
-          transition: box-shadow var(--transition), transform var(--transition);
-        }
-        .topbar-avatar-link:hover {
-          box-shadow: 0 0 0 2px var(--accent-soft, rgba(37,99,235,0.2));
-          transform: scale(1.04);
-        }
-
-        .topbar-avatar-img {
-          width: 36px;
-          height: 36px;
-          min-width: 0;
-          min-height: 0;
-          object-fit: cover;
-        }
-
-        .topbar-avatar-fallback {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 12px;
-          font-weight: 800;
+        /* Bell turns accent color when unread */
+        html[data-unread] .topbar-bell {
           color: var(--accent);
-          background: var(--bg-elevated);
-          font-family: var(--font-display);
+        }
+
+        /* User initials chip */
+        .topbar-user-chip {
+          height: 30px;
+          min-width: 30px;
+          padding: 0 9px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 700;
+          font-family: var(--font-mono, 'Space Mono', monospace);
+          background: var(--accent-soft, rgba(59,130,246,0.12));
+          color: var(--accent, #3b82f6);
+          border: 1px solid rgba(59,130,246,0.25);
+          text-decoration: none;
+          letter-spacing: 0.08em;
+          transition: all 150ms ease;
+          cursor: pointer;
+          margin-left: 4px;
+        }
+        .topbar-user-chip:hover {
+          background: var(--accent, #3b82f6);
+          color: #ffffff;
         }
       `}</style>
     </div>

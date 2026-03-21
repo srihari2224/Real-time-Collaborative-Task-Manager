@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Calendar, Flag, Tag, CheckSquare, Plus, FileText,
@@ -29,11 +30,14 @@ export function TaskPanel() {
   const { taskPanelOpen, activePanelTaskId, activePanelTab, closeTaskPanel, setActivePanelTab } =
     useUIStore();
   const { user } = useAuthStore();
+  const pathname = usePathname();
+  const isMyTasks = pathname === '/my-tasks';
 
   const [task, setTask] = useState<ApiTask | null>(null);
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [editingTitle, setEditingTitle] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const loadTask = useCallback(async (id: string) => {
     setLoading(true);
@@ -77,10 +81,11 @@ export function TaskPanel() {
     }
   };
 
-  const handleDeleteTask = async () => {
+  const handleDeleteTask = () => { if (task) setShowDeleteConfirm(true); };
+
+  const confirmDelete = async () => {
     if (!task) return;
-    const ok = window.confirm('Are you sure you want to delete this task?');
-    if (!ok) return;
+    setShowDeleteConfirm(false);
     try {
       await tasksApi.delete(task.id);
       toast.success('Task deleted');
@@ -96,6 +101,32 @@ export function TaskPanel() {
     <AnimatePresence>
       {taskPanelOpen && (
         <>
+          {/* ── Custom delete confirmation modal ── */}
+          <AnimatePresence>
+            {showDeleteConfirm && (
+              <motion.div
+                style={{ position:'fixed',inset:0,zIndex:600,background:'rgba(0,0,0,0.72)',display:'flex',alignItems:'center',justifyContent:'center',padding:16 }}
+                initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                <motion.div
+                  style={{ background:'var(--bg-surface)',border:'1px solid var(--border-strong)',padding:24,width:340,maxWidth:'90vw',boxShadow:'0 24px 60px rgba(0,0,0,0.6)' }}
+                  initial={{ scale:0.95,y:10 }} animate={{ scale:1,y:0 }} exit={{ scale:0.95 }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <p style={{ fontSize:11,fontWeight:800,color:'#ef4444',textTransform:'uppercase',letterSpacing:'0.07em',marginBottom:10,fontFamily:'var(--font-mono)' }}>Delete Task?</p>
+                  <p style={{ fontSize:13.5,color:'var(--text-secondary)',lineHeight:1.6,marginBottom:20 }}>
+                    Permanently remove <strong style={{ color:'var(--text-primary)' }}>"{task?.title}"</strong> and all subtasks, comments, and files?
+                  </p>
+                  <div style={{ display:'flex',gap:8,justifyContent:'flex-end' }}>
+                    <button onClick={() => setShowDeleteConfirm(false)} style={{ padding:'8px 16px',background:'var(--bg-elevated)',border:'1px solid var(--border-default)',color:'var(--text-secondary)',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'0.05em' }}>Cancel</button>
+                    <button onClick={confirmDelete} style={{ padding:'8px 16px',background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.4)',color:'#ef4444',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'var(--font-mono)',textTransform:'uppercase',letterSpacing:'0.05em' }}>Delete</button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.div
             className="task-panel-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -139,9 +170,11 @@ export function TaskPanel() {
                       </h2>
                     )}
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="panel-close-btn" onClick={handleDeleteTask} title="Delete Task" style={{ color: '#ef4444' }}>
-                        <Trash2 size={14} />
-                      </button>
+                      {!isMyTasks && (
+                        <button className="panel-close-btn" onClick={handleDeleteTask} title="Delete Task" style={{ color: '#ef4444' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                       <button className="panel-close-btn" onClick={closeTaskPanel}>
                         <X size={14} />
                       </button>

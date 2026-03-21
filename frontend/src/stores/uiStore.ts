@@ -23,6 +23,14 @@ interface UIStore {
   setOfflineBanner: (v: boolean) => void;
 }
 
+/* Read saved theme from localStorage — default to 'dark' */
+const getSavedTheme = (): 'dark' | 'light' => {
+  if (typeof window === 'undefined') return 'dark';
+  const saved = localStorage.getItem('tf-theme');
+  if (saved === 'light' || saved === 'dark') return saved;
+  return 'dark';
+};
+
 export const useUIStore = create<UIStore>((set) => ({
   sidebarOpen: true,
   searchOpen: false,
@@ -30,7 +38,7 @@ export const useUIStore = create<UIStore>((set) => ({
   activePanelTaskId: null,
   activePanelTab: 'overview',
   activeView: 'list',
-  theme: 'light',
+  theme: 'dark',  // default dark; Providers will sync from localStorage
   offlineBanner: false,
 
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
@@ -44,12 +52,22 @@ export const useUIStore = create<UIStore>((set) => ({
   toggleTheme: () =>
     set((s) => {
       const next = s.theme === 'dark' ? 'light' : 'dark';
-      if (typeof window !== 'undefined') localStorage.setItem('tf-theme', next);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tf-theme', next);
+        document.documentElement.classList.remove('dark', 'light');
+        document.documentElement.classList.add(next);
+      }
       return { theme: next };
     }),
   setTheme: (t) => {
-    if (typeof window !== 'undefined') localStorage.setItem('tf-theme', t);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tf-theme', t);
+      document.documentElement.classList.remove('dark', 'light');
+      document.documentElement.classList.add(t);
+    }
     set({ theme: t });
   },
   setOfflineBanner: (v) => set({ offlineBanner: v }),
 }));
+
+export { getSavedTheme };

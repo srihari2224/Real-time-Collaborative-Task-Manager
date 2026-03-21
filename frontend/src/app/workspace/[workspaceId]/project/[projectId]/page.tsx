@@ -28,10 +28,10 @@ import toast from 'react-hot-toast';
 /*  Static config                                                               */
 /* ─────────────────────────────────────────────────────────────────────────── */
 const PRIORITY_STYLE: Record<string, { color: string; bg: string; border: string; stripe: string }> = {
-  urgent: { color: '#dc2626', bg: 'rgba(220,38,38,0.09)', border: 'rgba(220,38,38,0.22)', stripe: '#dc2626' },
-  high: { color: '#ea580c', bg: 'rgba(234,88,12,0.09)', border: 'rgba(234,88,12,0.22)', stripe: '#ea580c' },
-  medium: { color: '#2563eb', bg: 'rgba(37,99,235,0.09)', border: 'rgba(37,99,235,0.22)', stripe: '#2563eb' },
-  low: { color: '#64748b', bg: 'rgba(100,116,139,0.09)', border: 'rgba(100,116,139,0.22)', stripe: '#94a3b8' },
+  urgent: { color: '#ef4444', bg: 'rgba(239,68,68,0.09)',   border: 'rgba(239,68,68,0.22)',   stripe: '#ef4444' },
+  high:   { color: '#f97316', bg: 'rgba(249,115,22,0.09)', border: 'rgba(249,115,22,0.22)', stripe: '#f97316' },
+  medium: { color: '#3b82f6', bg: 'rgba(59,130,246,0.09)', border: 'rgba(59,130,246,0.22)', stripe: '#3b82f6' },
+  low:    { color: '#525252', bg: 'rgba(82,82,82,0.09)',   border: 'rgba(82,82,82,0.22)',   stripe: '#333333' },
 };
 
 /* Fix 1: Use React.ComponentType — needs explicit React import at top */
@@ -41,7 +41,7 @@ const VIEW_TABS: { key: ViewType; label: string; Icon: React.ComponentType<{ siz
   { key: 'overview', label: 'Overview', Icon: BarChart2 },
 ];
 
-const PIE_COLORS = ['#16a34a', '#7c3aed', '#d97706', '#dc2626'];
+const PIE_COLORS = ['#22c55e', '#a855f7', '#f59e0b', '#ef4444'];
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 /*  Shared interface for the shape sub-components expect                        */
@@ -149,8 +149,10 @@ export default function ProjectPage() {
     };
   }, [workspaceId, projectId, queryClient]);
 
+  const [showDeleteProjectConfirm, setShowDeleteProjectConfirm] = useState(false);
+
   const handleDeleteProject = async () => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
+    setShowDeleteProjectConfirm(false);
     try {
       await projectsApi.delete(projectId);
       toast.success('Project deleted');
@@ -159,6 +161,7 @@ export default function ProjectPage() {
       toast.error('Failed to delete project');
     }
   };
+
 
   const kanbanTasks: KanbanTask[] = tasks.map((t) => ({
     ...t,
@@ -184,10 +187,38 @@ export default function ProjectPage() {
       <>
         <style>{CSS}</style>
         <div className="pp-root">
-          <TopBar title="Loading…" />
-          <div className="pp-loader">
-            <Loader2 size={20} className="pp-spin" />
-            <span>Loading project…</span>
+          <TopBar title="..." />
+          {/* View bar skeleton */}
+          <div className="pp-view-bar">
+            <div style={{ display: 'flex', gap: 0, flex: 1 }}>
+              {[60,70,80].map((w, i) => (
+                <div key={i} className="skeleton" style={{ height: 14, width: w, margin: '12px 14px' }} />
+              ))}
+            </div>
+            <div className="skeleton" style={{ height: 32, width: 100 }} />
+          </div>
+          {/* Kanban skeleton columns */}
+          <div style={{ flex: 1, display: 'flex', gap: 12, padding: '16px 20px', overflow: 'hidden' }}>
+            {[1,2,3].map((col) => (
+              <div key={col} style={{ flex: 1, background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="skeleton" style={{ height: 10, width: 60 }} />
+                  <div className="skeleton" style={{ height: 18, width: 24 }} />
+                </div>
+                <div style={{ flex: 1, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[1,2,3].map(c => (
+                    <div key={c} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderLeft: '3px solid var(--bg-overlay)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div className="skeleton" style={{ height: 12, width: '80%' }} />
+                      <div className="skeleton" style={{ height: 10, width: '55%' }} />
+                      <div style={{ display: 'flex', gap: 0 }}>
+                        <div className="skeleton" style={{ width: 22, height: 22 }} />
+                        <div className="skeleton" style={{ width: 22, height: 22, marginLeft: -4 }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </>
@@ -420,8 +451,11 @@ function KanbanView({
     <div className="pp-kanban-root">
       {loadingTasks && (
         <div className="pp-kanban-loading">
-          <Loader2 size={18} className="pp-spin" />
-          <span>Loading tasks…</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[1,2,3].map(d => (
+              <div key={d} className="skeleton" style={{ width: 8, height: 8, animationDelay: `${(d-1)*200}ms` }} />
+            ))}
+          </div>
         </div>
       )}
       <div className="pp-kanban-columns">
@@ -663,27 +697,28 @@ function OverviewView({ tasks }: { tasks: ApiTask[] }) {
 
 /* ─────────────────────────────────────────────────────────────────────────── */
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Space+Mono:wght@400;700&display=swap');
 
 .pp-root {
-  --pp-font:      'Plus Jakarta Sans','Inter',sans-serif;
-  --pp-bg:        #f0f4f8;
-  --pp-surface:   #ffffff;
-  --pp-elev:      #f7f9fc;
-  --pp-overlay:   #eef2f7;
-  --pp-txt:       #0f172a;
-  --pp-txt2:      #475569;
-  --pp-muted:     #94a3b8;
-  --pp-border:    rgba(15,23,42,0.08);
-  --pp-border2:   rgba(15,23,42,0.14);
-  --pp-border3:   rgba(15,23,42,0.24);
-  --pp-accent:    #2563eb;
-  --pp-acc-soft:  rgba(37,99,235,0.10);
-  --pp-radius:    10px;
-  --pp-radius-sm: 6px;
-  --pp-shadow:    0 1px 4px rgba(15,23,42,0.10);
-  --pp-shadow-md: 0 4px 16px rgba(15,23,42,0.10);
-  --pp-glow:      0 0 0 3px rgba(37,99,235,0.18);
+  --pp-font:      'Inter', sans-serif;
+  --pp-mono:      'Space Mono', monospace;
+  --pp-bg:        #000000;
+  --pp-surface:   #0a0a0a;
+  --pp-elev:      #111111;
+  --pp-overlay:   #161616;
+  --pp-txt:       #ffffff;
+  --pp-txt2:      #a3a3a3;
+  --pp-muted:     #525252;
+  --pp-border:    rgba(255,255,255,0.06);
+  --pp-border2:   rgba(255,255,255,0.10);
+  --pp-border3:   rgba(255,255,255,0.20);
+  --pp-accent:    #3b82f6;
+  --pp-acc-soft:  rgba(59,130,246,0.12);
+  --pp-radius:    0px;
+  --pp-radius-sm: 0px;
+  --pp-shadow:    0 1px 4px rgba(0,0,0,0.6);
+  --pp-shadow-md: 0 4px 16px rgba(0,0,0,0.6);
+  --pp-glow:      0 0 0 1px rgba(59,130,246,0.4);
   --pp-t:         150ms cubic-bezier(.4,0,.2,1);
   display: flex; flex-direction: column;
   height: 100%; overflow: hidden;
@@ -691,24 +726,7 @@ const CSS = `
   background: var(--pp-bg); color: var(--pp-txt);
   position: relative;
 }
-html.dark .pp-root {
-  --pp-bg:        #0b1120;
-  --pp-surface:   #111827;
-  --pp-elev:      #1c2333;
-  --pp-overlay:   #243049;
-  --pp-txt:       #f1f5f9;
-  --pp-txt2:      #94a3b8;
-  --pp-muted:     #64748b;
-  --pp-border:    rgba(255,255,255,0.06);
-  --pp-border2:   rgba(255,255,255,0.12);
-  --pp-border3:   rgba(255,255,255,0.22);
-  --pp-accent:    #3b82f6;
-  --pp-acc-soft:  rgba(59,130,246,0.12);
-  --pp-shadow:    0 1px 4px rgba(0,0,0,0.40);
-  --pp-shadow-md: 0 4px 16px rgba(0,0,0,0.36);
-  --pp-glow:      0 0 0 3px rgba(59,130,246,0.25);
-}
-.pp-loader { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px; color: var(--pp-muted); font-family: var(--pp-font); }
+.pp-loader { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--pp-muted); font-family: var(--pp-mono); }
 .pp-spin { animation: pp-spin 1s linear infinite; }
 @keyframes pp-spin { to { transform: rotate(360deg); } }
 .pp-view-bar {
@@ -716,69 +734,78 @@ html.dark .pp-root {
   padding: 0 20px; background: var(--pp-surface);
   border-bottom: 1px solid var(--pp-border); flex-shrink: 0;
 }
-.pp-view-tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; }
+.pp-view-tabs { display: flex; flex: 1; min-width: 0; overflow-x: auto; border-bottom: none; gap: 0; }
 .pp-view-tab {
   display: flex; align-items: center; gap: 5px; padding: 12px 14px;
   background: transparent; border: none; border-bottom: 2px solid transparent;
-  color: var(--pp-muted); font-size: 12.5px; font-weight: 600;
-  font-family: var(--pp-font); cursor: pointer; transition: all var(--pp-t);
-  white-space: nowrap; flex-shrink: 0;
+  color: var(--pp-muted); font-size: 11px; font-weight: 700;
+  font-family: var(--pp-mono); text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; transition: all var(--pp-t); white-space: nowrap; flex-shrink: 0;
+  margin-bottom: -1px;
 }
-.pp-view-tab:hover { color: var(--pp-txt); }
+.pp-view-tab:hover { color: var(--pp-txt2); }
 .pp-view-tab.active { color: var(--pp-accent); border-bottom-color: var(--pp-accent); }
 .pp-add-task-bar-btn {
-  display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px;
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px;
   background: var(--pp-accent); color: white; border: none;
-  border-radius: var(--pp-radius-sm); font-size: 13px; font-weight: 700;
-  font-family: var(--pp-font); cursor: pointer; flex-shrink: 0;
-  box-shadow: 0 2px 10px rgba(37,99,235,0.22); transition: all var(--pp-t);
+  font-size: 11px; font-weight: 700;
+  font-family: var(--pp-mono); text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer; flex-shrink: 0; transition: all var(--pp-t);
 }
-.pp-add-task-bar-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
+.pp-add-task-bar-btn:hover { background: #2563eb; box-shadow: 0 0 20px rgba(59,130,246,0.4); }
 .pp-content { flex: 1; overflow: hidden; min-height: 0; }
 .pp-kanban-root { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--pp-bg); }
 .pp-kanban-loading {
-  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 8px;
-  font-size: 13px; font-weight: 600; color: var(--pp-muted); background: rgba(240,244,248,0.72); font-family: var(--pp-font);
+  position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px;
+  background: rgba(0,0,0,0.5);
 }
-html.dark .pp-kanban-loading { background: rgba(11,17,32,0.72); }
-.pp-kanban-columns { display: flex; gap: 14px; padding: 16px 20px; flex: 1; min-height: 0; overflow-x: auto; align-items: stretch; }
+.pp-kanban-columns { display: flex; gap: 10px; padding: 14px 18px; flex: 1; min-height: 0; overflow-x: auto; align-items: stretch; }
 .pp-kanban-col {
   flex: 1; min-width: 240px; max-width: 420px; display: flex; flex-direction: column;
-  background: var(--pp-elev); border: 1px solid var(--pp-border); border-radius: var(--pp-radius);
+  background: var(--pp-surface); border: 1px solid var(--pp-border);
   overflow: hidden;
 }
 .pp-kanban-col-head {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 10px 12px; border-bottom: 1px solid var(--pp-border); background: var(--pp-surface); flex-shrink: 0;
+  padding: 10px 12px; border-bottom: 1px solid var(--pp-border); background: var(--pp-elev); flex-shrink: 0;
 }
-.pp-kanban-col-title { font-size: 12.5px; font-weight: 800; color: var(--pp-txt); letter-spacing: 0.02em; text-transform: uppercase; }
+.pp-kanban-col-title {
+  font-size: 9px; font-weight: 700;
+  font-family: var(--pp-mono);
+  color: var(--pp-muted); letter-spacing: 0.1em; text-transform: uppercase;
+}
 .pp-kanban-col-count {
-  font-size: 11px; font-weight: 700; color: var(--pp-accent); background: var(--pp-acc-soft);
-  border-radius: 99px; padding: 2px 8px; min-width: 22px; text-align: center;
+  font-size: 10px; font-weight: 700;
+  font-family: var(--pp-mono);
+  color: var(--pp-accent); background: var(--pp-acc-soft);
+  padding: 2px 7px;
 }
-.pp-kanban-col-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-.pp-kanban-empty { font-size: 12px; color: var(--pp-muted); text-align: center; padding: 20px 8px; }
+.pp-kanban-col-body { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pp-kanban-empty {
+  font-size: 10px; color: var(--pp-muted); text-align: center; padding: 20px 8px;
+  font-family: var(--pp-mono); text-transform: uppercase; letter-spacing: 0.06em;
+}
 .pp-kanban-card {
-  display: flex; overflow: hidden; background: var(--pp-surface);
-  border: 1px solid var(--pp-border); border-radius: var(--pp-radius-sm);
-  cursor: pointer; box-shadow: var(--pp-shadow); transition: all var(--pp-t); outline: none;
+  display: flex; overflow: hidden; background: var(--pp-elev);
+  border: 1px solid var(--pp-border);
+  cursor: pointer; transition: all var(--pp-t); outline: none;
 }
-.pp-kanban-card:hover { border-color: var(--pp-border2); box-shadow: var(--pp-shadow-md); transform: translateY(-1px); }
-.pp-kanban-card:focus-visible { outline: 2px solid var(--pp-accent); outline-offset: 2px; }
+.pp-kanban-card:hover { border-color: var(--pp-border2); background: var(--pp-overlay); }
+.pp-kanban-card:focus-visible { outline: 1px solid var(--pp-accent); outline-offset: 2px; }
 .pp-kanban-card-stripe { width: 3px; flex-shrink: 0; display: block; }
-.pp-kanban-card-inner { flex: 1; padding: 10px 11px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pp-kanban-card-inner { flex: 1; padding: 10px 11px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
 .pp-kanban-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.pp-kanban-card-title { font-size: 13px; font-weight: 700; color: var(--pp-txt); line-height: 1.35; margin: 0; flex: 1; min-width: 0; }
-.pp-kanban-pri { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 99px; flex-shrink: 0; }
-.pp-kanban-due { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; color: var(--pp-txt2); }
-.pp-kanban-due.overdue { color: #dc2626; }
-.pp-kanban-card-foot { padding-top: 4px; border-top: 1px solid var(--pp-border); }
-.pp-kanban-avatars .pp-avatar { width: 22px; height: 22px; font-size: 9px; }
+.pp-kanban-card-title { font-size: 12.5px; font-weight: 600; color: var(--pp-txt); line-height: 1.35; margin: 0; flex: 1; min-width: 0; letter-spacing: -0.01em; }
+.pp-kanban-pri { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 6px; font-family: var(--pp-mono); flex-shrink: 0; }
+.pp-kanban-due { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; font-family: var(--pp-mono); color: var(--pp-muted); }
+.pp-kanban-due.overdue { color: #ef4444; }
+.pp-kanban-card-foot { padding-top: 6px; border-top: 1px solid var(--pp-border); }
+.pp-kanban-avatars .pp-avatar { width: 20px; height: 20px; font-size: 9px; }
 .pp-avatar-stack { display: flex; }
-.pp-avatar { width: 25px; height: 25px; border-radius: 50%; background: var(--pp-acc-soft); color: var(--pp-accent); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 2px solid var(--pp-surface); margin-left: -6px; overflow: hidden; flex-shrink: 0; }
+.pp-avatar { width: 22px; height: 22px; background: var(--pp-acc-soft); color: var(--pp-accent); font-size: 9px; font-weight: 700; font-family: var(--pp-mono); display: flex; align-items: center; justify-content: center; border: 1px solid var(--pp-surface); margin-left: -5px; overflow: hidden; flex-shrink: 0; }
 .pp-avatar:first-child { margin-left: 0; }
 .pp-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.pp-avatar-overflow { background: var(--pp-overlay); color: var(--pp-muted); font-size: 9px; }
+.pp-avatar-overflow { background: var(--pp-overlay); color: var(--pp-muted); font-size: 8px; }
 .pp-cal-wrap { height: 100%; overflow-y: auto; padding: 20px; background: var(--pp-bg); }
 .pp-cal-nav { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
 .pp-cal-nav-btn {
