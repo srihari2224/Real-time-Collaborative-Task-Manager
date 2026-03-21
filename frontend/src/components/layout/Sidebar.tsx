@@ -53,9 +53,13 @@ export function Sidebar() {
   // If user lands outside a workspace route, hydrate to first workspace.
   useEffect(() => {
     if (loadingWorkspaces) return;
+    // Don't redirect if already on a valid non-workspace route
+    const nonWorkspaceRoutes = ['/inbox', '/settings', '/my-tasks', '/profile'];
+    const isNonWorkspaceRoute = nonWorkspaceRoutes.some((route) => pathname.startsWith(route));
+    if (isNonWorkspaceRoute) return;
     if (workspaceId || !workspaces.length) return;
     router.replace(`/workspace/${workspaces[0].id}`);
-  }, [loadingWorkspaces, workspaceId, workspaces, router]);
+  }, [loadingWorkspaces, workspaceId, workspaces, router, pathname]);
 
   // Load notification count
   useEffect(() => {

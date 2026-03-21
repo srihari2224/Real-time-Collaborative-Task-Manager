@@ -11,7 +11,7 @@ import { getSocket, SOCKET_EVENTS } from '@/lib/socket';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import {
   List, Calendar, BarChart2, Filter,
-  Share2, ChevronDown, ChevronRight, Plus, Loader2, X
+  Share2, ChevronDown, ChevronRight, Plus, Loader2, X, MessageSquare, Paperclip
 } from 'lucide-react';
 import { formatDate, isOverdue, PRIORITY_CONFIG } from '@/lib/utils';
 import { Priority } from '@/types';
@@ -365,10 +365,19 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
 
 // ─── List View ────────────────────────────────────────────────────────────────
 
+const STATUS_COLORS: Record<string, { bg: string; color: string; label: string }> = {
+  todo: { bg: '#f3f4f6', color: '#6b7280', label: 'Pending' },
+  in_progress: { bg: '#dbeafe', color: '#2563eb', label: 'In Progress' },
+  in_review: { bg: '#fef3c7', color: '#f59e0b', label: 'In Review' },
+  done: { bg: '#dcfce7', color: '#22c55e', label: 'Completed' },
+  cancelled: { bg: '#fee2e2', color: '#ef4444', label: 'Cancelled' },
+};
+
 function ListView({ sections, tasks, onTaskClick, onAddTask }: any) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  
   return (
-    <div className="scroll-y" style={{ height: '100%', padding: '16px 20px' }}>
+    <div className="scroll-y" style={{ height: '100%', padding: '16px 20px', background: '#f8fafc' }}>
       {/* Add Task Button - Centered in content area */}
       <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'center' }}>
         <button 
@@ -407,47 +416,216 @@ function ListView({ sections, tasks, onTaskClick, onAddTask }: any) {
         const secTasks = tasks.filter((t: any) => t.section_id === sec.id);
         const isCollapsed = collapsed[sec.id];
         return (
-          <div key={sec.id} style={{ marginBottom: 20 }}>
+          <div key={sec.id} style={{ marginBottom: 24 }}>
             <button
               onClick={() => setCollapsed((prev) => ({ ...prev, [sec.id]: !prev[sec.id] }))}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--font-display)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', fontFamily: 'var(--font-display)' }}
             >
               {isCollapsed ? <ChevronRight size={13} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={13} style={{ color: 'var(--text-muted)' }} />}
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{sec.name}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{sec.name}</span>
               <span style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-elevated)', borderRadius: 99, padding: '1px 7px', border: '1px solid var(--border-subtle)' }}>{secTasks.length}</span>
             </button>
             <AnimatePresence>
               {!isCollapsed && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-                    {secTasks.length === 0 ? (
-                      <div style={{ padding: '16px', textAlign: 'center', fontSize: 12.5, color: 'var(--text-muted)' }}>No tasks in this section</div>
-                    ) : secTasks.map((task: any, i: number) => (
-                      <div
-                        key={task.id}
-                        onClick={() => onTaskClick(task.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', cursor: 'pointer', borderBottom: i < secTasks.length - 1 ? '1px solid var(--border-subtle)' : 'none', transition: 'background var(--transition)', borderLeft: `3px solid ${PRIORITY_CONFIG[task.priority as Priority]?.color ?? '#6b7280'}` }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <div style={{ width: 16, height: 16, borderRadius: 3, border: '2px solid var(--border-strong)', flexShrink: 0 }} />
-                        <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{task.title}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          {task.due_date && (
-                            <span style={{ fontSize: 11.5, color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : 'var(--text-muted)', fontWeight: 500 }}>
-                              {formatDate(task.due_date)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {secTasks.length === 0 ? (
+                    <div style={{ padding: '16px', textAlign: 'center', fontSize: 12.5, color: 'var(--text-muted)' }}>No tasks in this section</div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+                      {secTasks.map((task: any) => (
+                        <ProjectTaskCard key={task.id} task={task} onClick={() => onTaskClick(task.id)} />
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function ProjectTaskCard({ task, onClick }: { task: any; onClick: () => void }) {
+  const statusConfig = STATUS_COLORS[task.status] || STATUS_COLORS.todo;
+  const priorityConfig = PRIORITY_CONFIG[task.priority as Priority];
+  const progress = task.subtask_total > 0 
+    ? (task.subtask_done / task.subtask_total) * 100 
+    : task.status === 'done' ? 100 : 0;
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: 'white',
+        borderRadius: 12,
+        border: '1px solid #e5e7eb',
+        padding: 16,
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)';
+        e.currentTarget.style.transform = 'translateY(-2px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)';
+        e.currentTarget.style.transform = 'translateY(0)';
+      }}
+    >
+      {/* Header with Status and Priority */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{
+          background: statusConfig.bg,
+          color: statusConfig.color,
+          padding: '3px 10px',
+          borderRadius: 20,
+          fontSize: 10,
+          fontWeight: 600,
+          textTransform: 'capitalize',
+        }}>
+          {statusConfig.label}
+        </span>
+        <span style={{
+          background: priorityConfig?.bg || '#f3f4f6',
+          color: priorityConfig?.color || '#6b7280',
+          padding: '3px 10px',
+          borderRadius: 20,
+          fontSize: 10,
+          fontWeight: 600,
+        }}>
+          {priorityConfig?.label || task.priority} Priority
+        </span>
+      </div>
+
+      {/* Title */}
+      <h3 style={{
+        fontSize: 14,
+        fontWeight: 700,
+        color: '#111827',
+        marginBottom: 6,
+        lineHeight: 1.3,
+      }}>
+        {task.title}
+      </h3>
+
+      {/* Description */}
+      {task.description && (
+        <p style={{
+          fontSize: 12,
+          color: '#6b7280',
+          marginBottom: 12,
+          lineHeight: 1.4,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
+          {task.description}
+        </p>
+      )}
+
+      {/* Progress Section */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>
+            {task.subtask_done} / {task.subtask_total} done
+          </span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            {Math.round(progress)}%
+          </span>
+        </div>
+        <div style={{
+          height: 5,
+          background: '#e5e7eb',
+          borderRadius: 3,
+          overflow: 'hidden',
+        }}>
+          <div style={{
+            height: '100%',
+            width: `${progress}%`,
+            background: task.status === 'done' ? '#22c55e' : '#2563eb',
+            borderRadius: 3,
+            transition: 'width 0.3s',
+          }} />
+        </div>
+      </div>
+
+      {/* Due Date */}
+      {task.due_date && (
+        <div style={{ fontSize: 11, color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : '#6b7280', marginBottom: 10 }}>
+          Due: {formatDate(task.due_date)}
+        </div>
+      )}
+
+      {/* Footer with Assignees */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {(task.assignees ?? []).slice(0, 3).map((assignee: any, i: number) => (
+            <div
+              key={assignee.id}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: '#e0e7ff',
+                color: '#4338ca',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11,
+                fontWeight: 600,
+                border: '2px solid white',
+                marginLeft: i > 0 ? -6 : 0,
+                overflow: 'hidden',
+              }}
+              title={assignee.name || assignee.email}
+            >
+              {assignee.avatar_url ? (
+                <img src={assignee.avatar_url} alt="" style={{ width: 28, height: 28, objectFit: 'cover' }} />
+              ) : (
+                (assignee.name || assignee.email)?.[0]?.toUpperCase()
+              )}
+            </div>
+          ))}
+          {(task.assignees ?? []).length > 3 && (
+            <div style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: '#f3f4f6',
+              color: '#6b7280',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 600,
+              border: '2px solid white',
+              marginLeft: -6,
+            }}>
+              +{(task.assignees ?? []).length - 3}
+            </div>
+          )}
+        </div>
+
+        {/* Comment & Attachment Icons */}
+        <div style={{ display: 'flex', gap: 12, color: '#9ca3af' }}>
+          {task.comment_count > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <MessageSquare size={12} />
+              <span style={{ fontSize: 11 }}>{task.comment_count}</span>
+            </div>
+          )}
+          {task.attachment_count > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <Paperclip size={12} />
+              <span style={{ fontSize: 11 }}>{task.attachment_count}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
