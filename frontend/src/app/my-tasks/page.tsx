@@ -82,13 +82,13 @@ export default function MyTasksPage() {
             const allTasks = taskArrays.flat();
             const mine = allTasks.filter((t) => (t.assignees ?? []).some((a) => a.id === currentUserId));
             if (mounted) setTasks(mine);
-          } catch {}
+          } catch { }
         };
 
         socket.on(SOCKET_EVENTS.TASK_CREATED, reload);
         socket.on(SOCKET_EVENTS.TASK_UPDATED, reload);
         socket.on(SOCKET_EVENTS.TASK_DELETED, reload);
-      } catch {}
+      } catch { }
     };
 
     hydrateWorkspaceRooms();
@@ -135,43 +135,43 @@ export default function MyTasksPage() {
       <div className="page-content scroll-y" style={{ background: '#f8fafc' }}>
         {/* Filter Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-          <FilterTab 
-            label="All" 
-            count={tasks.length} 
-            active={activeFilter === 'all'} 
-            onClick={() => setActiveFilter('all')} 
+          <FilterTab
+            label="All"
+            count={tasks.length}
+            active={activeFilter === 'all'}
+            onClick={() => setActiveFilter('all')}
           />
-          <FilterTab 
-            label="Pending" 
-            count={pendingCount} 
-            active={activeFilter === 'pending'} 
-            onClick={() => setActiveFilter('pending')} 
+          <FilterTab
+            label="Pending"
+            count={pendingCount}
+            active={activeFilter === 'pending'}
+            onClick={() => setActiveFilter('pending')}
           />
-          <FilterTab 
-            label="In Progress" 
-            count={inProgressCount} 
-            active={activeFilter === 'in_progress'} 
-            onClick={() => setActiveFilter('in_progress')} 
+          <FilterTab
+            label="In Progress"
+            count={inProgressCount}
+            active={activeFilter === 'in_progress'}
+            onClick={() => setActiveFilter('in_progress')}
           />
-          <FilterTab 
-            label="Completed" 
-            count={completedCount} 
-            active={activeFilter === 'completed'} 
-            onClick={() => setActiveFilter('completed')} 
+          <FilterTab
+            label="Completed"
+            count={completedCount}
+            active={activeFilter === 'completed'}
+            onClick={() => setActiveFilter('completed')}
           />
         </div>
 
         {/* Task Cards Grid */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', 
-          gap: 20 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+          gap: 20
         }}>
           {filteredTasks.map((task) => (
-            <TaskCard 
-              key={task.id} 
-              task={task} 
-              onClick={() => openTaskPanel(task.id)} 
+            <TaskCard
+              key={task.id}
+              task={task}
+              onClick={() => openTaskPanel(task.id)}
             />
           ))}
         </div>
@@ -234,8 +234,8 @@ function FilterTab({ label, count, active, onClick }: { label: string; count: nu
 function TaskCard({ task, onClick }: { task: ApiTask; onClick: () => void }) {
   const statusConfig = STATUS_COLORS[task.status] || STATUS_COLORS.todo;
   const priorityConfig = PRIORITY_CONFIG[task.priority as Priority];
-  const progress = task.subtask_total > 0 
-    ? (task.subtask_done / task.subtask_total) * 100 
+  const progress = task.subtask_total > 0
+    ? (task.subtask_done / task.subtask_total) * 100
     : task.status === 'done' ? 100 : 0;
 
   return (
@@ -347,10 +347,10 @@ function TaskCard({ task, onClick }: { task: ApiTask; onClick: () => void }) {
         </div>
         <div>
           <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Due Date</div>
-          <div style={{ 
-            fontSize: 13, 
-            fontWeight: 600, 
-            color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : '#374151' 
+          <div style={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: isOverdue(task.due_date ?? undefined) ? '#ef4444' : '#374151'
           }}>
             {task.due_date ? formatDate(task.due_date) : 'No due date'}
           </div>
@@ -427,4 +427,6 @@ function TaskCard({ task, onClick }: { task: ApiTask; onClick: () => void }) {
     </div>
   );
 }
+
+
 
