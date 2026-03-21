@@ -14,7 +14,7 @@ import { EVENTS } from '../websocket/events.js';
 
 export const createTask = async (req: FastifyRequest, reply: FastifyReply) => {
   const body = req.body as any;
-  const { assignee_ids, assignee_emails, ...rest } = body;
+  const { assignee_ids, assignee_emails, status: _ignored_status, ...rest } = body;
 
   const task = await taskService.createTask(req.user!.id, rest);
 
@@ -71,7 +71,7 @@ export const getTask = async (req: FastifyRequest, reply: FastifyReply) => {
 export const updateTask = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
   const body = req.body as any;
-  const { assignee_ids, ...rest } = body;
+  const { assignee_ids, status: _ignored_status, ...rest } = body;
 
   const task = await taskService.updateTask(id, rest);
 
@@ -155,7 +155,11 @@ export const deleteSubtask = async (req: FastifyRequest, reply: FastifyReply) =>
 
 async function maybeUpdateTaskStatus(taskId: string): Promise<void> {
   const { total, done } = await subtaskRepository.progress(taskId);
-  if (total === 0) return;
+  if (total === 0) {
+    // No subtasks means 0% completion => todo.
+    await taskRepository.update(taskId, { status: 'todo' as any });
+    return;
+  }
   let newStatus: string | undefined;
   if (done === total) newStatus = 'done';
   else if (done > 0) newStatus = 'in_progress';

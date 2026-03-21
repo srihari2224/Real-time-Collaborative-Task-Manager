@@ -14,17 +14,19 @@ export const createTaskSchema = {
   body: Joi.object({
     project_id: uuid.required(), title: Joi.string().min(1).max(255).required(),
     description: Joi.string().max(5000).optional().allow(''),
-    status: Joi.string().valid('todo', 'in_progress', 'in_review', 'done', 'cancelled').default('todo'),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').default('medium'),
-    assignee_id: uuid.optional().allow(null), due_date: Joi.date().iso().optional().allow(null),
+    // Multi-assignees: either UUIDs or emails (controller resolves emails -> UUIDs)
+    assignee_ids: Joi.array().items(uuid).optional(),
+    assignee_emails: Joi.array().items(Joi.string().email()).optional(),
+    due_date: Joi.date().iso().optional().allow(null),
   }),
 };
 export const updateTaskSchema = {
   body: Joi.object({
     title: Joi.string().min(1).max(255).optional(), description: Joi.string().max(5000).optional().allow(''),
-    status: Joi.string().valid('todo', 'in_progress', 'in_review', 'done', 'cancelled').optional(),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
-    assignee_id: uuid.optional().allow(null), due_date: Joi.date().iso().optional().allow(null),
+    assignee_ids: Joi.array().items(uuid).optional(),
+    due_date: Joi.date().iso().optional().allow(null),
     position: Joi.number().integer().min(0).optional(),
   }),
 };
@@ -32,7 +34,8 @@ export const taskQuerySchema = {
   querystring: Joi.object({
     status: Joi.string().valid('todo', 'in_progress', 'in_review', 'done', 'cancelled').optional(),
     priority: Joi.string().valid('low', 'medium', 'high', 'urgent').optional(),
-    assignee_id: uuid.optional(),
+    // Backend uses `assignee_user_id` to filter tasks by a specific assignee.
+    assignee_user_id: uuid.optional(),
     page: Joi.number().integer().min(1).default(1),
     limit: Joi.number().integer().min(1).max(100).default(20),
   }),

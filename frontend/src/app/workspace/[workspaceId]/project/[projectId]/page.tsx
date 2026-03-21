@@ -32,7 +32,6 @@ const STATUS_LABELS: Record<ApiTask['status'], string> = {
 const STATUS_ORDER: ApiTask['status'][] = ['todo', 'in_progress', 'in_review', 'done'];
 
 const VIEW_TABS: { key: ViewType; label: string; icon: React.ReactNode }[] = [
-  { key: 'kanban', label: 'Board', icon: <LayoutGrid size={13} /> },
   { key: 'list', label: 'List', icon: <List size={13} /> },
   { key: 'calendar', label: 'Calendar', icon: <Calendar size={13} /> },
   { key: 'overview', label: 'Overview', icon: <BarChart2 size={13} /> },
@@ -131,15 +130,6 @@ export default function ProjectPage() {
     created_by: t.created_by,
   }));
 
-  const handleStatusUpdate = async (taskId: string, newStatus: string) => {
-    try {
-      await tasksApi.update(taskId, { status: newStatus as ApiTask['status'] });
-      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: newStatus as ApiTask['status'] } : t));
-    } catch {
-      toast.error('Failed to update task status');
-    }
-  };
-
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -194,13 +184,6 @@ export default function ProjectPage() {
 
       {/* Main Content */}
       <div style={{ flex: 1, overflow: 'hidden', padding: activeView === 'kanban' ? '16px 20px' : '0' }}>
-        {activeView === 'kanban' && (
-          <KanbanBoard
-            sections={kanbanSections}
-            tasks={kanbanTasks as any}
-            onStatusChange={handleStatusUpdate}
-          />
-        )}
         {activeView === 'list' && (
           <ListView sections={kanbanSections} tasks={kanbanTasks as any} onTaskClick={openTaskPanel} />
         )}
@@ -238,7 +221,6 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
   const [title, setTitle]         = useState('');
   const [description, setDesc]    = useState('');
   const [priority, setPriority]   = useState<ApiTask['priority']>('medium');
-  const [status, setStatus]       = useState<ApiTask['status']>('todo');
   const [dueDate, setDueDate]     = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
@@ -265,7 +247,6 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
-        status,
         dueDate: dueDate || undefined,
         assigneeEmails,
       } as any);
@@ -305,8 +286,8 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
             style={{ resize: 'vertical', fontSize: 13 }}
           />
 
-          {/* Priority + Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          {/* Priority */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Priority</label>
               <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
@@ -314,15 +295,6 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
                 <option value="medium">🔵 Medium</option>
                 <option value="high">🟠 High</option>
                 <option value="urgent">🔴 Urgent</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Status</label>
-              <select className="input" value={status} onChange={(e) => setStatus(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
-                <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
-                <option value="in_review">In Review</option>
-                <option value="done">Done</option>
               </select>
             </div>
           </div>

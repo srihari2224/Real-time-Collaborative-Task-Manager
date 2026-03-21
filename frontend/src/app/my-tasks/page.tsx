@@ -17,7 +17,6 @@ export default function MyTasksPage() {
   const { user } = useAuthStore();
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
 
   const currentUserId = (user as any)?.id ?? '';
 
@@ -52,7 +51,7 @@ export default function MyTasksPage() {
     loadMyTasks();
   }, [currentUserId]);
 
-  const activeTasks = tasks.filter((t) => !completedIds.has(t.id) && t.status !== 'done');
+  const activeTasks = tasks.filter((t) => t.status !== 'done');
   const overdue = activeTasks.filter((t) => isOverdue(t.due_date ?? undefined));
   const dueToday = activeTasks.filter((t) => isDueToday(t.due_date ?? undefined) && !isOverdue(t.due_date ?? undefined));
   const thisWeek = activeTasks.filter((t) => isDueThisWeek(t.due_date ?? undefined) && !isOverdue(t.due_date ?? undefined) && !isDueToday(t.due_date ?? undefined));
@@ -64,19 +63,6 @@ export default function MyTasksPage() {
     { key: 'week', label: 'Due This Week', color: '#6366f1', tasks: thisWeek },
     { key: 'none', label: 'No Due Date', color: 'var(--text-muted)', tasks: noDueDate },
   ].filter((s) => s.tasks.length > 0);
-
-  const toggleComplete = async (taskId: string) => {
-    setCompletedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId); else next.add(taskId);
-      return next;
-    });
-    // Optimistically mark done in backend
-    try {
-      const isNowDone = !completedIds.has(taskId);
-      await tasksApi.update(taskId, { status: isNowDone ? 'done' : 'todo' });
-    } catch { /* silent */ }
-  };
 
   if (loading) {
     return (
@@ -108,29 +94,20 @@ export default function MyTasksPage() {
 
             <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               {section.tasks.map((task, i) => {
-                const isComplete = completedIds.has(task.id);
                 return (
                   <div
                     key={task.id}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
                       borderBottom: i < section.tasks.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                      transition: 'background var(--transition)', opacity: isComplete ? 0.5 : 1,
+                      transition: 'background var(--transition)',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-hover)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {/* Checkbox */}
-                    <button
-                      onClick={() => toggleComplete(task.id)}
-                      style={{ width: 17, height: 17, borderRadius: 4, border: `2px solid ${isComplete ? 'var(--accent)' : 'var(--border-strong)'}`, background: isComplete ? 'var(--accent)' : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all var(--transition)' }}
-                    >
-                      {isComplete && <span style={{ color: 'white', fontSize: 11, fontWeight: 800 }}>✓</span>}
-                    </button>
-
                     <span
                       onClick={() => openTaskPanel(task.id)}
-                      style={{ flex: 1, fontSize: 13, fontWeight: 500, cursor: 'pointer', textDecoration: isComplete ? 'line-through' : 'none', color: isComplete ? 'var(--text-muted)' : 'var(--text-primary)' }}
+                      style={{ flex: 1, fontSize: 13, fontWeight: 500, cursor: 'pointer', color: 'var(--text-primary)' }}
                     >
                       {task.title}
                     </span>

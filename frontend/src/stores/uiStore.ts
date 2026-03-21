@@ -28,7 +28,7 @@ export const useUIStore = create<UIStore>((set) => ({
   taskPanelOpen: false,
   activePanelTaskId: null,
   activePanelTab: 'overview',
-  activeView: 'kanban',
+  activeView: 'list',
   theme: 'light',
   offlineBanner: false,
 

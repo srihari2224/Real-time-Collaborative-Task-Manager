@@ -11,7 +11,7 @@ interface TaskFilters {
 }
 
 // Full task row enriched with assignee list + counts
-export interface RichTask extends Omit<Task, 'assignee_id'> {
+export interface RichTask extends Task {
   assignees: { id: string; email: string; full_name: string | null; avatar_url: string | null }[];
   comment_count: number;
   attachment_count: number;
@@ -27,7 +27,7 @@ export const create = async (data: {
     `INSERT INTO tasks (project_id, title, description, status, priority, created_by, due_date)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
     [data.project_id, data.title, data.description ?? null,
-     data.status ?? 'todo', data.priority ?? 'medium',
+     'todo', data.priority ?? 'medium',
      data.created_by, data.due_date ?? null]
   );
   return rows[0] as Task;

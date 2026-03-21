@@ -212,7 +212,6 @@ export function TaskPanel() {
 function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: boolean; onUpdate: (t: ApiTask) => void }) {
   const [description, setDescription] = useState(task.description ?? '');
   const [priority, setPriority] = useState<ApiTask['priority']>(task.priority);
-  const [status, setStatus]     = useState<ApiTask['status']>(task.status);
   const [savingDesc, setSavingDesc] = useState(false);
 
   // Subtasks state
@@ -231,7 +230,6 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
   useEffect(() => {
     setDescription(task.description ?? '');
     setPriority(task.priority);
-    setStatus(task.status);
   }, [task.id, task.description, task.priority, task.status]);
 
   // Load subtasks and links
@@ -266,15 +264,6 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
     } catch { setPriority(task.priority); toast.error('Failed'); }
   };
 
-  const saveStatus = async (s: ApiTask['status']) => {
-    setStatus(s);
-    try {
-      const updated = await tasksApi.update(task.id, { status: s });
-      onUpdate(updated);
-      toast.success('Status updated', { duration: 1000, id: 'status' });
-    } catch { setStatus(task.status); toast.error('Failed'); }
-  };
-
   // Subtask handlers
   const handleAddSubtask = async () => {
     if (!newSubtask.trim() || addingSubtask) return;
@@ -297,7 +286,7 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
       await tasksApi.updateSubtask(task.id, subtask.id, { is_done: !subtask.is_done });
       // Reload task status from backend (may have auto-updated)
       const updated = await tasksApi.get(task.id).catch(() => null);
-      if (updated) { onUpdate(updated); setStatus(updated.status); }
+      if (updated) { onUpdate(updated); }
     } catch {
       setSubtasks((prev) => prev.map((s) => s.id === subtask.id ? { ...s, is_done: subtask.is_done } : s));
       toast.error('Failed');
@@ -353,15 +342,22 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
         </MetaField>
 
         <MetaField label="Status" icon={<Tag size={12} />}>
-          <select
-            value={status}
-            onChange={(e) => saveStatus(e.target.value as ApiTask['status'])}
-            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: 12.5, padding: '3px 6px', fontFamily: 'var(--font-display)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+          <span
+            style={{
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-default)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-primary)',
+              fontSize: 12.5,
+              padding: '3px 8px',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+            }}
           >
-            {(['todo', 'in_progress', 'in_review', 'done', 'cancelled'] as ApiTask['status'][]).map((s) => (
-              <option key={s} value={s}>{s.replace('_', ' ')}</option>
-            ))}
-          </select>
+            {task.status.replace('_', ' ')}
+          </span>
         </MetaField>
 
         <MetaField label="Due Date" icon={<Calendar size={12} />}>
