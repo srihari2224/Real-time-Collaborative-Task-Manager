@@ -1,404 +1,599 @@
 # TaskFlow — Real-time Collaborative Task Manager
 
-A full-stack, real-time collaborative task management application built with a modern, scalable architecture.
+> A full-stack, production-grade task management platform with real-time collaboration, multi-assignee tasks, subtask checklists, in-app notifications, and live team chat.
 
-## 🌐 Live Demo
-
-[![Live Demo](https://img.shields.io/badge/Live-Demo-green?style=for-the-badge)](https://taskify-ashen-chi.vercel.app/)
-
----
-
-## 🚀 Local Development Setup
-
-Follow these steps to clone the repo and run both the **backend** and **frontend** on your machine.
-
-### 1. Prerequisites
-
-Make sure the following tools are installed before you begin:
-
-| Tool | Version | Download |
-|---|---|---|
-| **Node.js** | ≥ 18.x | [nodejs.org](https://nodejs.org) |
-| **npm** | ≥ 9.x (comes with Node) | — |
-| **Git** | any recent | [git-scm.com](https://git-scm.com) |
-| **Redis** | ≥ 6.x | [redis.io](https://redis.io/docs/getting-started/) — or use [Upstash](https://upstash.com) (free cloud Redis) |
-| **PostgreSQL** | via Supabase | Create a free project at [supabase.com](https://supabase.com) |
-
-> **Windows users:** To run Redis locally on Windows, the easiest option is to use [WSL 2](https://learn.microsoft.com/en-us/windows/wsl/install) or the [Memurai](https://www.memurai.com/) Redis-compatible service. Alternatively, use a free cloud Redis from [Upstash](https://upstash.com).
+[![Live Demo](https://img.shields.io/badge/Live-Demo-22c55e?style=for-the-badge&logo=vercel)](https://taskify-ashen-chi.vercel.app/)
+[![Backend](https://img.shields.io/badge/API-Render-6366f1?style=for-the-badge&logo=render)](https://real-time-collaborative-task-manager-yizi.onrender.com)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
 
 ---
 
-### 2. Clone the Repository
+## 🗂️ Table of Contents
+
+1. [Working Demo](#-working-demo)
+2. [Setup — Under 5 Minutes](#-setup--under-5-minutes)
+3. [Architecture Overview](#-architecture-overview)
+   - [Backend](#backend)
+   - [Frontend](#frontend)
+4. [Key Features](#-key-features)
+5. [Database Schema & Seed Data](#-database-schema--seed-data)
+6. [API Reference](#-api-reference)
+7. [Tests](#-tests)
+8. [Assumptions & Trade-offs](#-assumptions--trade-offs)
+9. [Known Limitations & What I'd Do Next](#-known-limitations--what-id-do-next)
+10. [AI Usage Disclosure](#-ai-usage-disclosure)
+
+---
+
+## 🎥 Working Demo
+
+**Deployed:** [https://taskify-ashen-chi.vercel.app](https://taskify-ashen-chi.vercel.app)
+
+### Key flows you can test live
+
+| Flow | Steps |
+|------|-------|
+| **Sign in** | Email/password or Google OAuth on the `/auth` page |
+| **Create workspace** | Prompted on first login via `/onboarding` |
+| **Create project** | Sidebar → "New Project" inside a workspace |
+| **Create task w/ multi-assignee** | "New Task" → add multiple emails → press Enter per email |
+| **Subtask checklist** | Open task → Overview tab → type a subtask → tick to complete |
+| **Real-time chat** | Open task → Chat tab → messages appear live in other tabs/browsers |
+| **Notifications (Inbox)** | Assign a task to yourself → check Inbox for the notification |
+| **My Tasks** | Left sidebar → "My Tasks" → filtered to tasks assigned to you |
+
+---
+
+## ⚡ Setup — Under 5 Minutes
+
+### Prerequisites
+
+| Tool | Version |
+|------|---------|
+| Node.js | ≥ 18.x |
+| npm | ≥ 9.x |
+| Git | any |
+| Supabase account | free tier works — [supabase.com](https://supabase.com) |
+
+> **No local database or Redis needed.** The backend uses Supabase (hosted PostgreSQL) and in-process Socket.IO rooms — no Redis required for local dev.
+
+---
+
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/srihari2224/Real-time-Collaborative-Task-Manager.git
 cd Real-time-Collaborative-Task-Manager
 ```
 
----
-
-### 3. Set Up the Backend
-
-#### 3a. Install dependencies
+### Step 2 — Backend
 
 ```bash
 cd backend
 npm install
-```
 
-#### 3b. Configure environment variables
-
-Copy the example file and fill in your own values:
-
-```bash
-# On Mac/Linux:
+# Mac/Linux
 cp .env.example .env
-
-# On Windows (cmd):
-copy .env.example .env
-
-# On Windows (PowerShell):
+# Windows PowerShell
 Copy-Item .env.example .env
 ```
 
-Open `.env` in any text editor and fill in the required values:
+Open `backend/.env` and fill in the **3 required** values:
 
-| Variable | Where to get it |
-|---|---|
-| `SUPABASE_URL` | Supabase dashboard → Project Settings → API |
-| `SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API |
-| `DATABASE_URL` | Supabase dashboard → Project Settings → Database → Connection string |
-| `REDIS_URL` | `redis://localhost:6379` for local Redis, or your Upstash URL |
-| `JWT_SECRET` | Any random string ≥ 32 characters |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS IAM (needed only for file uploads & emails) |
-| `S3_BUCKET_NAME` | Your S3 bucket name (optional for basic dev) |
-| `SES_FROM_EMAIL` | Verified SES sender email (optional for basic dev) |
-| `ALLOWED_ORIGINS` | `http://localhost:3000` |
-
-> **Tip:** For basic local development you only **need** the Supabase, Redis, and JWT variables. AWS S3/SES are only required for file upload and email features.
-
-#### 3c. Run database migrations
-
-```bash
-npm run db:migrate
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres
+JWT_SECRET=any-random-32-char-string
+ALLOWED_ORIGINS=http://localhost:3000
 ```
 
-Optionally seed the database with sample data:
+> AWS/S3/SES/Redis are **optional** — file uploads and email work only in production on Render where these are configured.
 
-```bash
-npm run db:seed
-```
-
-#### 3d. Start the backend dev server
+Run the SQL schema in **Supabase → SQL Editor** (the full schema is in `backend/src/models/schema.sql`), then:
 
 ```bash
 npm run dev
+# API running at http://localhost:5000
 ```
 
-The API will be running at **http://localhost:5000**
+### Step 3 — Frontend
 
----
-
-### 4. Set Up the Frontend
-
-Open a **new terminal** for the frontend (keep the backend running).
-
-#### 4a. Install dependencies
+Open a **new terminal**:
 
 ```bash
 cd frontend
 npm install
-```
 
-#### 4b. Configure environment variables
-
-```bash
-# On Mac/Linux:
+# Mac/Linux
 cp .env.local.example .env.local
-
-# On Windows (cmd):
-copy .env.local.example .env.local
-
-# On Windows (PowerShell):
+# Windows PowerShell
 Copy-Item .env.local.example .env.local
 ```
 
-Open `.env.local` and fill in:
-
-| Variable | Value |
-|---|---|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:5000` |
-| `NEXT_PUBLIC_SOCKET_URL` | `http://localhost:5000` |
-| `NEXT_PUBLIC_SUPABASE_URL` | Same as backend `SUPABASE_URL` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same as backend `SUPABASE_ANON_KEY` |
-
-#### 4c. Start the frontend dev server
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
 ```bash
 npm run dev
+# App running at http://localhost:3000
 ```
 
-The app will be running at **http://localhost:3000**
+**That's it.** Open `http://localhost:3000` and sign in. ✅
 
 ---
 
-### 5. Quick-Start Checklist
+## 🏗️ Architecture Overview
 
 ```
-[ ] Node.js ≥ 18 installed
-[ ] Redis running (local or cloud)
-[ ] Supabase project created
-[ ] backend/.env filled in
-[ ] npm install done inside /backend
-[ ] npm run db:migrate run
-[ ] npm run dev started in /backend  →  http://localhost:5000
-[ ] frontend/.env.local filled in
-[ ] npm install done inside /frontend
-[ ] npm run dev started in /frontend  →  http://localhost:3000
+┌─────────────────────────────────────────────────────────────────────┐
+│  Browser (Next.js 14)                                               │
+│  - Zustand stores (auth, UI state)                                  │
+│  - REST calls via apiClient.ts                                      │
+│  - Socket.IO client for real-time events                            │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │  HTTPS / WSS
+┌───────────────────────────────▼─────────────────────────────────────┐
+│  Backend (Fastify + TypeScript)  — Render.com                       │
+│                                                                     │
+│  HTTP Routes → Middleware → Controller → Service → Repository       │
+│                    │                                                │
+│              Socket.IO Server (in-process, no Redis adapter)        │
+│              - Workspace rooms  (task CRUD events)                  │
+│              - Task rooms       (chat, subtask events)              │
+│                                                                     │
+│  Uploads  → AWS S3 (presigned URLs)                                │
+│  Email    → AWS SES                                                 │
+└───────────────────────────────┬─────────────────────────────────────┘
+                                │  pg pool
+┌───────────────────────────────▼─────────────────────────────────────┐
+│  Supabase (PostgreSQL)                                              │
+│  - Auth (email/password + Google OAuth)                             │
+│  - Row Level Security disabled — enforced at the API layer          │
+│  - Tables: users, workspaces, workspace_members, projects,          │
+│    tasks, task_assignees, subtasks, task_links,                     │
+│    comments, attachments, notifications                             │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-### 6. Useful Scripts
+### Backend
 
-**Backend**
+**Stack:** Node.js 18 · Fastify v4 · TypeScript · PostgreSQL (Supabase) · Socket.IO
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start dev server with hot-reload |
-| `npm run build` | Compile TypeScript to `dist/` |
-| `npm start` | Start production server |
-| `npm run db:migrate` | Run database migrations |
-| `npm run db:seed` | Seed sample data |
-| `npm test` | Run Jest test suite |
-| `npm run lint` | Lint TypeScript source |
+```
+backend/src/
+├── config/          # DB pool, Supabase client, env validation
+├── controllers/     # Thin route handlers — delegate to services
+├── services/        # Business logic (task visibility, auth, files)
+├── repositories/    # All SQL lives here (no ORM — raw pg pool)
+├── models/
+│   ├── schema.sql   # Full DB schema (run once in Supabase SQL Editor)
+│   └── migrate.ts   # Migration runner
+├── routes/          # Fastify route registrations
+├── middlewares/     # requireAuth (JWT verify), error handler
+├── websocket/
+│   ├── events.ts    # Typed EventName enum
+│   └── handler.ts   # emitToWorkspace / emitToTask helpers
+├── utils/           # apiResponse (success/error/paginated), logger
+└── types/           # Shared TypeScript interfaces
+```
 
-**Frontend**
+**Layer responsibilities:**
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start Next.js dev server |
-| `npm run build` | Build production bundle |
-| `npm start` | Start production server |
-| `npm run lint` | Lint source files |
+| Layer | Responsibility |
+|-------|---------------|
+| `routes/` | Register HTTP paths + attach middleware |
+| `controllers/` | Parse request, call service, format response |
+| `services/` | Business rules (visibility, ownership checks) |
+| `repositories/` | Raw SQL — returns typed domain objects |
+| `websocket/` | Emit Socket.IO events after mutations |
+
+**Request lifecycle:**
+```
+Request → Helmet/CORS → Rate-limit → requireAuth (JWT) → Controller
+       → Service → Repository → PostgreSQL
+       → apiResponse JSON  +  emitToWorkspace/Task (Socket.IO)
+```
+
+**Real-time events (Socket.IO):**
+
+| Event | Trigger | Scope |
+|-------|---------|-------|
+| `task:created` | New task | Workspace room |
+| `task:updated` | Edit task / status change | Workspace room |
+| `task:deleted` | Delete task | Workspace room |
+| `comment:created` | New chat message | Task room |
+| `comment:deleted` | Delete message | Task room |
+| `subtask_created/updated/deleted` | Subtask CRUD | Task room |
+| `link_added/removed` | Link CRUD | Task room |
+| `notification` | Task assigned | Workspace room (per user) |
 
 ---
 
-### 7. Project Structure Overview
+### Frontend
+
+**Stack:** Next.js 14 (App Router) · TypeScript · Vanilla CSS · Zustand · Framer Motion · Socket.IO client · Recharts
+
+```
+frontend/src/
+├── app/
+│   ├── auth/              # Sign-in page (email + Google OAuth)
+│   ├── onboarding/        # First-time workspace creation
+│   ├── workspace/[id]/
+│   │   ├── page.tsx       # Workspace dashboard
+│   │   └── project/[id]/
+│   │       └── page.tsx   # Project: Kanban / List / Calendar / Overview
+│   ├── my-tasks/          # Tasks assigned to current user
+│   ├── inbox/             # In-app notifications
+│   ├── privacy/           # Privacy Policy (required for Google OAuth)
+│   └── terms/             # Terms of Service (required for Google OAuth)
+├── components/
+│   ├── board/             # KanbanBoard — drag-ready column layout
+│   ├── chat/              # ChatTab — real-time Socket.IO messages
+│   ├── layout/            # Sidebar, TopBar, TaskPanel
+│   ├── task/              # TaskPanel (subtasks, links, meta editing)
+│   └── ui/                # Avatar, Badge, ProgressBar, AssigneePicker
+├── lib/
+│   ├── apiClient.ts       # Typed API helpers + all domain types
+│   ├── socket.ts          # Socket.IO singleton with lazy connect
+│   └── utils.ts           # formatDate, isOverdue, PRIORITY_CONFIG …
+└── stores/
+    ├── authStore.ts        # Zustand: current user
+    └── uiStore.ts          # Zustand: task panel open/closed, active tab
+```
+
+**State management philosophy:** Zustand for global UI state (which task panel is open, active view). Local `useState` for everything else. No Redux, no Context soup.
+
+**Task Panel — tabs:**
+- **Overview** — editable title, priority/status dropdowns (any assignee), description, subtask checklist with progress bar, links
+- **Chat** — real-time Socket.IO messages with optimistic send, emoji reactions, search
+- **Files** — attachments list with delete
+
+---
+
+## ✨ Key Features
+
+| Feature | Detail |
+|---------|--------|
+| **Authentication** | Email/password + Google OAuth via Supabase Auth |
+| **Workspaces** | Each user's top-level container; first created on onboarding |
+| **Projects** | Belong to a workspace; any member can create one |
+| **Multi-assignee tasks** | Add assignees by email at creation; resolved to user IDs server-side |
+| **Task visibility scoping** | Owners/admins see all tasks; members see only their assigned tasks (enforced in `taskRepository`) |
+| **Subtasks** | Ordered checklist per task; completion auto-updates parent task status |
+| **Priority & Status** | Any assignee (not just owner) can change — `urgent/high/medium/low` × `todo/in_progress/in_review/done/cancelled` |
+| **Task links** | Add clickable URLs with optional labels |
+| **Real-time chat** | Socket.IO per-task room; optimistic send; deduplication in socket listener |
+| **In-app notifications** | `notifications` table; populated on task assignment; Inbox page with mark-read |
+| **Kanban, List, Calendar, Overview views** | All in the project page; Recharts pie/bar for Overview |
+
+---
+
+## 🗄️ Database Schema & Seed Data
+
+### Run schema (Supabase SQL Editor)
+
+The full schema is in [`backend/src/models/schema.sql`](./backend/src/models/schema.sql).
+
+**Core tables:**
+
+```
+users                 — synced from Supabase Auth on first sign-in
+workspaces            — top-level container
+workspace_members     — (workspace_id, user_id, role: owner|admin|member)
+projects              — belong to workspace
+tasks                 — belong to project; no single assignee_id
+task_assignees        — junction: (task_id, user_id)   ← multi-assignee
+subtasks              — checklist items per task
+task_links            — URLs attached to a task
+comments              — chat messages per task
+attachments           — file metadata (stored in S3)
+notifications         — in-app notification feed
+```
+
+### Seed script
+
+To quickly populate your Supabase database with demo data, run:
+
+```bash
+cd backend
+npm run db:seed
+```
+
+This creates:
+- 1 demo workspace: **"Demo Workspace"**
+- 2 projects: **"Frontend Sprint"** and **"Backend API"**
+- 6 sample tasks across both projects (mix of priorities and statuses)
+- 3 subtasks per task
+- 2 sample links per task
+
+> The seed script is located at `backend/src/models/seed.js` and uses the `DATABASE_URL` from your `.env`.
+
+**Manual seed alternative:** Sign up, create a workspace during onboarding, then create projects and tasks manually through the UI — the full flow takes under 2 minutes.
+
+---
+
+## 📡 API Reference
+
+Base URL (production): `https://real-time-collaborative-task-manager-yizi.onrender.com/api/v1`
+
+All endpoints require `Authorization: Bearer <supabase-jwt>` except auth routes.
+
+**Response envelope:**
+```json
+{ "success": true, "message": "...", "data": { ... }, "timestamp": "..." }
+```
+
+### Auth
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/auth/sync` | Upsert user from Supabase JWT on login |
+
+### Workspaces
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/workspaces` | List user's workspaces |
+| `POST` | `/workspaces` | Create workspace |
+| `GET` | `/workspaces/:id/members` | List members |
+| `POST` | `/workspaces/:id/members/invite` | Invite by email |
+| `DELETE` | `/workspaces/:id/members/:userId` | Remove member |
+
+### Projects
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/projects?workspace_id=` | List projects in workspace |
+| `POST` | `/projects` | Create project |
+| `PATCH` | `/projects/:id` | Update project |
+| `DELETE` | `/projects/:id` | Delete project (owner only) |
+
+### Tasks
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/tasks?project_id=` | List tasks (visibility-scoped) |
+| `POST` | `/tasks` | Create task (`assignee_ids[]` or `assignee_emails[]`) |
+| `GET` | `/tasks/:id` | Get task |
+| `PATCH` | `/tasks/:id` | Update task (title, status, priority, description, due_date) |
+| `DELETE` | `/tasks/:id` | Delete task |
+
+### Subtasks
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/tasks/:id/subtasks` | List subtasks |
+| `POST` | `/tasks/:id/subtasks` | Create subtask |
+| `PATCH` | `/tasks/:id/subtasks/:subtaskId` | Toggle is_done / rename |
+| `DELETE` | `/tasks/:id/subtasks/:subtaskId` | Delete subtask |
+
+### Comments (Chat)
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/tasks/:id/comments` | List messages |
+| `POST` | `/tasks/:id/comments` | Add message |
+| `DELETE` | `/tasks/:id/comments/:commentId` | Delete own message |
+
+### Links & Attachments
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/tasks/:id/links` | List links |
+| `POST` | `/tasks/:id/links` | Add link `{url, label?}` |
+| `DELETE` | `/tasks/:id/links/:linkId` | Remove link |
+| `GET` | `/tasks/:id/attachments` | List file attachments |
+| `POST` | `/tasks/:id/attachments` | Upload file (multipart) |
+| `DELETE` | `/tasks/:id/attachments/:attachmentId` | Delete attachment |
+
+### Notifications
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/notifications` | List current user's notifications |
+| `PATCH` | `/notifications/:id/read` | Mark one as read |
+| `PATCH` | `/notifications/read-all` | Mark all as read |
+
+---
+
+## 🧪 Tests
+
+Tests are located in `backend/tests/` and focus on the core business logic.
+
+### Run tests
+
+```bash
+cd backend
+npm test
+```
+
+### What is tested
+
+**`tests/task.test.ts` — Task domain rules (Jest + Supertest)**
+
+| Test case | What it validates |
+|-----------|------------------|
+| Create task with multiple assignees by email | Emails resolve to user IDs; `task_assignees` rows created |
+| Non-assignee member cannot see task | Visibility scoping returns 403/empty list for non-assigned members |
+| Owner always sees all tasks | `isOwnerOrAdminOfProject` returns true for workspace owner |
+| Subtask completion triggers task status update | Toggle last subtask → parent task auto-moves to `done` |
+| Duplicate subtask add | Idempotent — no duplicates created |
+| Notification created on assignment | `notifications` row exists after task create with assignees |
+
+**`tests/auth.test.ts` — Auth middleware**
+
+| Test case | What it validates |
+|-----------|------------------|
+| Missing JWT returns 401 | `requireAuth` rejects requests without Bearer token |
+| Invalid JWT returns 401 | Tampered token rejected by Supabase verification |
+| Valid JWT passes through | Route handler receives `req.user` populated correctly |
+
+> **Why these tests?** Task visibility and multi-assignee resolution are the two hardest pieces of business logic — they're what break if the data model changes. The auth middleware is the single point of failure for security, so it's covered explicitly.
+
+---
+
+## 📐 Assumptions & Trade-offs
+
+### Assumptions
+
+1. **Authentication is handled entirely by Supabase Auth.** The backend trusts Supabase JWTs and upserts the user on first login. No custom auth registration flow is built.
+
+2. **Single workspace per user on onboarding.** A user is nudged to create exactly one workspace on first login. They can create more, but the UX is optimised for one primary workspace.
+
+3. **Task visibility is role-based at the workspace level.** `owner` and `admin` workspace roles see all tasks. `member` role sees only tasks they are assigned to. This is enforced at the repository layer, not the database (no Supabase RLS).
+
+4. **Assignees are added by email at task creation.** The backend resolves emails to user IDs by looking them up in the `users` table. If the email doesn't exist yet (user hasn't signed up), the assignee is silently skipped — no invitation flow is built.
+
+5. **File uploads require AWS S3.** For local dev, file uploads will fail gracefully (no crash, just an error toast). This is acceptable because the core task management features work without it.
+
+6. **No Redis required for local development.** Socket.IO is run in single-instance in-process mode. For a multi-instance production deployment, a Redis Socket.IO adapter would be needed.
+
+### Trade-offs
+
+| Decision | Why | What we gave up |
+|----------|-----|-----------------|
+| **No ORM (raw `pg` pool)** | Full control over SQL, easier to debug, no N+1 magic | More boilerplate for joins; schema changes require SQL migrations |
+| **No Supabase RLS** | API-layer enforcement is easier to test and reason about | If someone bypasses the API with the anon key, Row Level Security is not a second line of defence |
+| **Socket.IO in-process (no Redis adapter)** | Zero infrastructure overhead for dev/demo | Cannot scale to multiple backend instances horizontally without adding the Redis adapter |
+| **Vanilla CSS (no Tailwind)** | Maximum control over design system, no class-name bloat | More verbose CSS; no utility shortcuts |
+| **Framer Motion for all animations** | Consistent, physics-based animations with minimal code | Adds ~80 KB to bundle |
+| **Optimistic chat messages** | Conversations feel instant | Message shows before server confirms — on error it's removed with a toast |
+| **Email-based assignee lookup** | Simpler UX — just type emails, no member-search dropdown needed | Assignees must already have accounts; no pending-invite state |
+
+---
+
+## 🔮 Known Limitations & What I'd Do Next
+
+### Current limitations
+
+| Area | Limitation |
+|------|-----------|
+| **Invite flow** | Assigning a task to an email that hasn't signed up silently skips them — no email invite is sent |
+| **Drag-and-drop Kanban** | Columns are visual-only; cards are not draggable between columns yet (status can be changed from the task panel) |
+| **File uploads** | Requires AWS S3 config; disabled in local dev |
+| **Email notifications** | AWS SES is wired up but not triggered yet for task assignments |
+| **Horizontal scaling** | Socket.IO runs in-process; multiple Render instances would need a Redis adapter |
+| **Search** | No global task or project search endpoint yet |
+| **Mobile responsiveness** | The layout is optimised for desktop; mobile is functional but not polished |
+
+### What I'd do next (priority order)
+
+1. **Drag-and-drop Kanban** — Add `@dnd-kit/core` to enable card dragging between status columns
+2. **Email invite on task assignment** — If the email doesn't exist in `users`, send a Supabase Auth invite link via SES
+3. **Redis Socket.IO adapter** — `socket.io-redis` for multi-instance horizontal scaling on production
+4. **Full-text search** — PostgreSQL `tsvector` + `GIN` index on task titles and descriptions
+5. **Mobile-first redesign** — Responsive sidebar collapse, bottom sheet task panel
+6. **Webhook support** — Fire webhooks on task state changes (Slack, GitHub Issues integration)
+7. **Activity log** — Immutable audit trail per task (who changed what and when)
+8. **Supabase RLS as a second layer** — Add policies to the DB as a defence-in-depth measure
+
+---
+
+## 🤖 AI Usage Disclosure
+
+This project was built with significant AI assistance (Gemini/Antigravity). Here is an honest account of what was used, reviewed, and changed.
+
+### What I used AI for
+
+| Area | AI's role |
+|------|-----------|
+| **Initial boilerplate** | Generated the Fastify + Socket.IO project scaffold, env validation, and layer separation (controllers/services/repositories) |
+| **Schema design iteration** | Brainstormed trade-offs for multi-assignee (junction table vs. JSONB array); agreed on junction table for query flexibility |
+| **`taskRepository.ts` rewrite** | AI generated the multi-assignee SQL (`ARRAY_AGG` join, subtask progress counts) — reviewed and tested manually |
+| **`TaskPanel.tsx`** | AI scaffolded the component structure; the subtask optimistic update logic and socket event wiring were iterated several times |
+| **CSS design system** | AI proposed the colour palette and CSS variable naming conventions; all visual details were reviewed and adjusted |
+| **Debugging 500 errors** | Used AI to interpret Supabase error logs (e.g., `null value in column workspace_id`) and trace the missing field back to the frontend request |
+| **TypeScript error fixing** | AI batch-fixed `EventName` type mismatches and null-vs-undefined errors in the controller layer |
+
+### What I reviewed and changed manually
+
+- **All SQL queries** — verified `ARRAY_AGG` joins produce correct output shape before trusting them
+- **Visibility scoping logic** — manually verified that member users cannot see tasks outside their assignments
+- **Socket.IO event dispatch** — ensured events are emitted after the DB write, not before
+- **Auth middleware** — read through the Supabase JWT verification flow and tested edge cases
+- **CSS design system** — tweaked colour values, spacing, and border-radius tokens to match the target aesthetic
+- **Environment variable handling** — verified no secrets leaked into frontend `.env.local.example`
+
+### One example where I disagreed with the AI's output
+
+**The AI initially suggested using Supabase RLS (Row Level Security) for task visibility** — writing policies directly on the `tasks` table so the database would automatically filter by user.
+
+**I disagreed** because:
+- RLS policies are hard to test without a real Supabase connection
+- They create invisible query filters that make debugging confusing
+- The service role client bypasses RLS anyway for admin operations
+- API-layer enforcement in `taskRepository.findByProject` is explicit, co-located with the query, and easy to unit-test in isolation
+
+So I kept RLS disabled and implemented visibility in the repository layer with a conditional `WHERE` clause based on `isOwnerOrAdmin`. Clear, testable, and portable to any PostgreSQL setup.
+
+---
+
+## 📁 Project Structure (Top-level)
 
 ```
 Real-time-Collaborative-Task-Manager/
-├── backend/          # Fastify + TypeScript API server
+├── backend/                    # Fastify + TypeScript REST API + Socket.IO
 │   ├── src/
-│   ├── .env.example  # ← copy to .env
+│   │   ├── config/             # DB, Supabase, env
+│   │   ├── controllers/        # Route handlers
+│   │   ├── services/           # Business logic
+│   │   ├── repositories/       # SQL layer (raw pg)
+│   │   ├── models/
+│   │   │   ├── schema.sql      # ← Run this in Supabase SQL Editor
+│   │   │   └── migrate.ts
+│   │   ├── routes/             # Fastify route registration
+│   │   ├── middlewares/        # Auth guard, error handler
+│   │   ├── websocket/          # Socket.IO events + room helpers
+│   │   └── utils/              # apiResponse, logger, pagination
+│   ├── tests/                  # Jest test suite
+│   ├── .env.example            # ← Copy to .env
 │   └── package.json
-└── frontend/         # Next.js 16 + TailwindCSS app
+│
+└── frontend/                   # Next.js 14 App Router
     ├── src/
-    ├── .env.local.example  # ← copy to .env.local
+    │   ├── app/                # File-based routes (Next.js)
+    │   ├── components/         # UI components
+    │   ├── lib/                # apiClient, socket, utils
+    │   └── stores/             # Zustand (auth, UI)
+    ├── .env.local.example      # ← Copy to .env.local
     └── package.json
 ```
 
 ---
 
+## 🛠️ Scripts
 
----
-
-## 🏗️ Backend Architecture
-
-### Tech Stack
-
-| Layer | Technology |
-|---|---|
-| **Runtime** | Node.js ≥ 18 |
-| **Framework** | Fastify v4 |
-| **Database** | PostgreSQL via Supabase |
-| **Auth** | Supabase Auth (JWT) |
-| **Cache / Queue** | Redis (ioredis) + Bull |
-| **Real-time** | Socket.IO + `@fastify/websocket` |
-| **File Storage** | AWS S3 |
-| **Email** | AWS SES |
-| **Validation** | Joi · Zod |
-| **Logging** | Pino + pino-pretty |
-| **Testing** | Jest + Supertest |
-
----
-
-### Directory Structure
-
-```
-backend/
-├── src/
-│   ├── config/           # Service clients & env validation
-│   │   ├── env.js        # Typed environment config (validated on startup)
-│   │   ├── supabase.js   # Supabase anon + admin clients, JWT helpers
-│   │   └── redis.js      # ioredis connection
-│   │
-│   ├── controllers/      # Route handler functions (thin layer — delegates to services)
-│   ├── services/         # Business logic layer
-│   ├── repositories/     # Database query layer (PostgreSQL via pg pool)
-│   ├── models/           # Schema definitions, migrations & seed scripts
-│   │   ├── migrate.js    # Run: npm run db:migrate
-│   │   └── seed.js       # Run: npm run db:seed
-│   │
-│   ├── routes/           # Fastify route registrations
-│   ├── middlewares/      # Auth guards, error handlers, request parsers
-│   ├── validators/       # Joi / Zod request validation schemas
-│   ├── websocket/        # Socket.IO event handlers & room management
-│   ├── jobs/             # Bull queue job definitions & processors
-│   ├── utils/            # Shared utilities
-│   │   ├── apiResponse.js # Standardised success / error / paginated helpers
-│   │   └── logger.js      # Pino logger instance
-│   ├── constants/        # App-wide constant values & enums
-│   └── types/            # JSDoc / type definitions
-│
-├── tests/                # Jest integration & unit tests
-├── .env.example          # Environment variable template
-├── .gitignore
-└── package.json
-```
-
----
-
-### Request / Response Flow
-
-```
-Client Request
-     │
-     ▼
-Fastify HTTP Server (port 5000)
-     │
-     ├─► @fastify/helmet      (security headers)
-     ├─► @fastify/cors        (CORS policy)
-     ├─► @fastify/rate-limit  (100 req / 60s default)
-     │
-     ▼
-Route Handler
-     │
-     ├─► Middleware (auth guard — verifies Supabase JWT)
-     ├─► Validator  (Joi / Zod schema check)
-     │
-     ▼
-Controller  →  Service  →  Repository  →  PostgreSQL (Supabase)
-                   │
-                   ├──► Redis (caching / session)
-                   ├──► AWS S3 (file uploads via presigned URLs)
-                   └──► AWS SES (transactional email)
-     │
-     ▼
-Standardised JSON Response
-{ success, message, data, timestamp }
-```
-
----
-
-### Real-time Architecture
-
-WebSocket connections are handled by **Socket.IO** (with a `@fastify/websocket` fallback):
-
-```
-Client  ──WS──►  Socket.IO Server
-                      │
-                      ├─► Auth middleware (verify JWT on handshake)
-                      ├─► Room management  (project / task rooms)
-                      └─► Event broadcast  (task updates, comments, presence)
-```
-
-Background jobs (email dispatch, file processing, notifications) run through **Bull** queues backed by Redis.
-
----
-
-### Authentication
-
-- **Provider**: Supabase Auth (email/password, OAuth, magic-link)
-- **Tokens**: Supabase JWTs — verified server-side with `supabase.auth.getUser(token)`
-- **Admin ops**: Service-role client (`supabaseAdmin`) used for invite/delete operations — bypasses Row Level Security (RLS)
-- **Custom JWT**: `jsonwebtoken` available for any supplemental token needs
-
----
-
-### Key NPM Scripts
+**Backend (`cd backend`)**
 
 | Script | Description |
-|---|---|
-| `npm run dev` | Start dev server with nodemon hot-reload |
+|--------|-------------|
+| `npm run dev` | Dev server with hot-reload (nodemon) |
+| `npm run build` | Compile TypeScript → `dist/` |
 | `npm start` | Start production server |
 | `npm test` | Run Jest test suite |
-| `npm run lint` | ESLint source files |
-| `npm run db:migrate` | Run database migrations |
-| `npm run db:seed` | Seed the database with initial data |
+| `npm run db:migrate` | Apply schema migrations |
+| `npm run db:seed` | Seed demo data |
+
+**Frontend (`cd frontend`)**
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Next.js dev server (localhost:3000) |
+| `npm run build` | Production build |
+| `npm start` | Start production server |
+| `npm run lint` | ESLint check |
 
 ---
 
-### Environment Variables
+## 🔐 Security Notes
 
-Copy `.env.example` to `.env` and fill in the values:
-
-| Variable | Description |
-|---|---|
-| `PORT` | Server port (default `5000`) |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_ANON_KEY` | Supabase public anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
-| `DATABASE_URL` | Direct PostgreSQL connection string |
-| `REDIS_URL` | Redis connection URL |
-| `AWS_ACCESS_KEY_ID` | AWS credentials for S3 & SES |
-| `AWS_SECRET_ACCESS_KEY` | AWS credentials for S3 & SES |
-| `S3_BUCKET_NAME` | S3 bucket for file uploads |
-| `SES_FROM_EMAIL` | Sender address for transactional emails |
-| `JWT_SECRET` | Secret for custom JWT signing (min 32 chars) |
-| `ALLOWED_ORIGINS` | Comma-separated CORS allowed origins |
-| `MAX_FILE_SIZE_MB` | Maximum upload file size (default `10`) |
-
-> **Never commit `.env` to version control.** Use `.env.example` as the reference template.
+- JWT verification on every authenticated route via Supabase `getUser(token)`
+- Helmet sets secure HTTP headers
+- CORS restricted to `ALLOWED_ORIGINS` environment variable
+- Rate limited at the Fastify layer
+- Service-role key is server-side only; never exposed to the frontend
+- File type and size validated before S3 upload
 
 ---
 
-### API Response Format
-
-All endpoints return a consistent JSON envelope:
-
-```json
-// Success
-{
-  "success": true,
-  "message": "Task created successfully",
-  "data": { ... },
-  "timestamp": "2026-03-20T07:30:00.000Z"
-}
-
-// Error
-{
-  "success": false,
-  "message": "Unauthorized",
-  "errors": null,
-  "timestamp": "2026-03-20T07:30:00.000Z"
-}
-
-// Paginated
-{
-  "success": true,
-  "message": "Success",
-  "data": [ ... ],
-  "pagination": {
-    "page": 1,
-    "limit": 20,
-    "total": 150,
-    "totalPages": 8,
-    "hasNextPage": true,
-    "hasPrevPage": false
-  },
-  "timestamp": "2026-03-20T07:30:00.000Z"
-}
-```
-
----
-
-### Security Highlights
-
-- **Helmet** — sets secure HTTP headers on every response
-- **CORS** — strict origin allowlist via `ALLOWED_ORIGINS`
-- **Rate limiting** — 100 requests per 60-second window (configurable)
-- **File uploads** — type & size validation before S3 upload (`@fastify/multipart`)
-- **RLS** — Supabase Row Level Security enforced at the database layer
-- **Secrets** — all credentials sourced from environment variables, never hardcoded
+*Built with ❤️ using Next.js, Fastify, Supabase, and Socket.IO*

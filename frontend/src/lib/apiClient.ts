@@ -45,6 +45,13 @@ export interface ApiProject {
   updated_at: string;
 }
 
+export interface ApiAssignee {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
 export interface ApiTask {
   id: string;
   project_id: string;
@@ -52,13 +59,28 @@ export interface ApiTask {
   description: string | null;
   status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
-  assignee_id: string | null;
+  assignees: ApiAssignee[];
   created_by: string;
+  created_by_name?: string;
   due_date: string | null;
   position: number;
   created_at: string;
   updated_at: string;
-  assignee?: ApiUser;
+  comment_count: number;
+  attachment_count: number;
+  subtask_total: number;
+  subtask_done: number;
+}
+
+export interface ApiSubtask {
+  id: string;
+  task_id: string;
+  title: string;
+  is_done: boolean;
+  position: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ApiComment {
@@ -75,12 +97,38 @@ export interface ApiAttachment {
   id: string;
   task_id: string;
   file_url: string;
+  url?: string;
   file_name: string;
+  filename?: string;
   file_size: number;
+  size_bytes?: number;
   file_type: string | null;
+  mime_type?: string | null;
   uploaded_by: string;
   uploaded_at: string;
+  created_at?: string;
   uploader?: ApiUser;
+}
+
+export interface ApiLink {
+  id: string;
+  task_id: string;
+  url: string;
+  label: string | null;
+  added_by: string;
+  created_at: string;
+}
+
+export interface ApiNotification {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  message: string | null;
+  entity_id: string | null;
+  entity_type: string | null;
+  is_read: boolean;
+  created_at: string;
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -90,18 +138,13 @@ function unwrap<T>(res: { data: { data: T } | T }): T {
   return d?.data !== undefined ? d.data : d;
 }
 
-// Paginated response: backend returns { data: { tasks, pagination } }
 function unwrapPaginated<T>(res: { data: any }): T[] {
   const d = res.data as any;
-  // Handle { data: { tasks: [...], pagination: {...} } }
   if (d?.data && typeof d.data === 'object' && !Array.isArray(d.data)) {
-    // Find the first array value in d.data (tasks, items, etc.)
     const arrays = Object.values(d.data).filter((v) => Array.isArray(v));
     if (arrays.length > 0) return arrays[0] as T[];
   }
-  // Handle { data: [...] }
   if (Array.isArray(d?.data)) return d.data as T[];
-  // Handle plain array
   if (Array.isArray(d)) return d as T[];
   return [];
 }
@@ -161,7 +204,7 @@ export const tasksApi = {
     description?: string;
     status?: ApiTask['status'];
     priority?: ApiTask['priority'];
-    assigneeId?: string | null;
+    assigneeIds?: string[];
     dueDate?: string | null;
   }) => api.post(`${BASE}/tasks`, {
     project_id: data.projectId,
@@ -169,23 +212,33 @@ export const tasksApi = {
     description: data.description,
     status: data.status,
     priority: data.priority,
-    assignee_id: data.assigneeId,
+    assignee_ids: data.assigneeIds ?? [],
     due_date: data.dueDate
   }).then(unwrap<ApiTask>),
   update: (
     id: string,
-    data: Partial<Omit<ApiTask, 'id' | 'project_id' | 'created_by' | 'created_at' | 'updated_at'>> & {
-      assigneeId?: string | null;
+    data: Partial<Omit<ApiTask, 'id' | 'project_id' | 'created_by' | 'created_at' | 'updated_at' | 'assignees'>> & {
+      assigneeIds?: string[];
     }
   ) => {
-    const payload = { ...data };
-    if ('assigneeId' in payload) {
-      payload.assignee_id = payload.assigneeId;
-      delete payload.assigneeId;
-    }
-    return api.put(`${BASE}/tasks/${id}`, payload).then(unwrap<ApiTask>);
+    const { assigneeIds, ...rest } = data;
+    return api.put(`${BASE}/tasks/${id}`, {
+      ...rest,
+      ...(assigneeIds !== undefined ? { assignee_ids: assigneeIds } : {}),
+    }).then(unwrap<ApiTask>);
   },
   delete: (id: string) => api.delete(`${BASE}/tasks/${id}`),
+
+  // Subtasks
+  listSubtasks: (id: string) =>
+    api.get(`${BASE}/tasks/${id}/subtasks`).then(unwrap<ApiSubtask[]>),
+  createSubtask: (id: string, title: string) =>
+    api.post(`${BASE}/tasks/${id}/subtasks`, { title }).then(unwrap<ApiSubtask>),
+  updateSubtask: (id: string, subtaskId: string, data: { title?: string; is_done?: boolean }) =>
+    api.patch(`${BASE}/tasks/${id}/subtasks/${subtaskId}`, data).then(unwrap<ApiSubtask>),
+  deleteSubtask: (id: string, subtaskId: string) =>
+    api.delete(`${BASE}/tasks/${id}/subtasks/${subtaskId}`),
+
   // Comments
   listComments: (id: string) =>
     api.get(`${BASE}/tasks/${id}/comments`).then(unwrap<ApiComment[]>),
@@ -193,6 +246,15 @@ export const tasksApi = {
     api.post(`${BASE}/tasks/${id}/comments`, { content }).then(unwrap<ApiComment>),
   deleteComment: (id: string, commentId: string) =>
     api.delete(`${BASE}/tasks/${id}/comments/${commentId}`),
+
+  // Links
+  listLinks: (id: string) =>
+    api.get(`${BASE}/tasks/${id}/links`).then(unwrap<ApiLink[]>),
+  addLink: (id: string, url: string, label?: string) =>
+    api.post(`${BASE}/tasks/${id}/links`, { url, label }).then(unwrap<ApiLink>),
+  removeLink: (id: string, linkId: string) =>
+    api.delete(`${BASE}/tasks/${id}/links/${linkId}`),
+
   // Attachments
   listAttachments: (id: string) =>
     api.get(`${BASE}/tasks/${id}/attachments`).then(unwrap<ApiAttachment[]>),
@@ -202,20 +264,31 @@ export const tasksApi = {
 
 // ─── Notifications ───────────────────────────────────────────────────────────
 
-export interface ApiNotification {
-  id: string;
-  user_id: string;
-  type: string;
-  entity_id: string | null;
-  entity_type: string | null;
-  is_read: boolean;
-  message: string | null;
-  created_at: string;
-}
-
 export const notificationsApi = {
-  list: () => api.get(`${BASE}/notifications`).then(unwrap<ApiNotification[]>),
+  list: () =>
+    api.get(`${BASE}/notifications`).then((res) => {
+      const d = (res.data as any)?.data ?? res.data;
+      return {
+        notifications: (d?.notifications ?? d ?? []) as ApiNotification[],
+        unread_count: (d?.unread_count ?? 0) as number,
+      };
+    }),
   markRead: (id: string) => api.patch(`${BASE}/notifications/${id}/read`),
   markAllRead: () => api.patch(`${BASE}/notifications/read-all`),
+  create: (data: {
+    user_id: string;
+    type: string;
+    title: string;
+    message?: string;
+    entity_id?: string;
+    entity_type?: string;
+  }) => api.post(`${BASE}/notifications`, data).then(unwrap<ApiNotification>),
+};
+
+// ─── Profile ─────────────────────────────────────────────────────────────────
+
+export const profileApi = {
+  update: (data: { full_name?: string; avatar_url?: string }) =>
+    api.patch(`${BASE}/auth/profile`, data).then((res) => (res.data as any)?.data ?? res.data),
 };
 

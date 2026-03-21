@@ -12,6 +12,7 @@ interface UIStore {
   offlineBanner: boolean;
 
   setSidebarOpen: (v: boolean) => void;
+  toggleSidebar: () => void;
   setSearchOpen: (v: boolean) => void;
   openTaskPanel: (taskId: string, tab?: 'overview' | 'chat' | 'attachments' | 'activity') => void;
   closeTaskPanel: () => void;
@@ -28,10 +29,11 @@ export const useUIStore = create<UIStore>((set) => ({
   activePanelTaskId: null,
   activePanelTab: 'overview',
   activeView: 'kanban',
-  theme: 'dark',
+  theme: 'light',
   offlineBanner: false,
 
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
+  toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSearchOpen: (v) => set({ searchOpen: v }),
   openTaskPanel: (taskId, tab = 'overview') =>
     set({ taskPanelOpen: true, activePanelTaskId: taskId, activePanelTab: tab }),

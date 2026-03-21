@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname, useRouter, useParams } from 'next/navigation';
 import {
   Home, CheckSquare, Bell, Settings, LogOut, Plus,
-  ChevronDown, FolderKanban, Loader2, X
+  ChevronDown, FolderKanban, Loader2, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
-import { workspacesApi, projectsApi, type ApiWorkspace, type ApiProject } from '@/lib/apiClient';
+import { workspacesApi, projectsApi, notificationsApi, type ApiWorkspace, type ApiProject } from '@/lib/apiClient';
 import { getInitials } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -19,7 +19,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const params = useParams();
-  const { sidebarOpen } = useUIStore();
+  const { sidebarOpen, toggleSidebar } = useUIStore();
   const { user, logout } = useAuthStore();
 
   const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
@@ -35,12 +35,21 @@ export function Sidebar() {
   const [newProjectColor, setNewProjectColor] = useState('#6366f1');
   const [creating, setCreating] = useState(false);
 
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const workspaceId = params?.workspaceId as string | undefined;
   const currentWorkspace = workspaces.find((w) => w.id === workspaceId) ?? workspaces[0];
 
   // Load workspaces
   useEffect(() => {
     workspacesApi.list().then(setWorkspaces).catch(() => {});
+  }, []);
+
+  // Load notification count
+  useEffect(() => {
+    notificationsApi.list().then(({ notifications }) => {
+      setUnreadCount(notifications.filter((n) => !n.is_read).length);
+    }).catch(() => {});
   }, []);
 
   // Load projects when workspace changes
@@ -57,7 +66,7 @@ export function Sidebar() {
   const navItems = [
     { href: currentWorkspace ? `/workspace/${currentWorkspace.id}` : '#', icon: <Home size={15} />, label: 'Home' },
     { href: '/my-tasks', icon: <CheckSquare size={15} />, label: 'My Tasks' },
-    { href: '/inbox', icon: <Bell size={15} />, label: 'Inbox' },
+    { href: '/inbox', icon: <Bell size={15} />, label: 'Inbox', badge: unreadCount },
   ];
 
   const handleLogout = async () => {
@@ -108,15 +117,26 @@ export function Sidebar() {
 
   return (
     <>
-      <nav className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <nav className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+        {/* Collapse toggle button */}
+        <button
+          onClick={toggleSidebar}
+          className="sidebar-toggle-btn"
+          title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        >
+          {sidebarOpen ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
+        </button>
+
         {/* Workspace Header */}
-        <div className="sidebar-workspace" onClick={() => setWorkspaceSwitcherOpen(!workspaceSwitcherOpen)}>
+        <div className="sidebar-workspace" onClick={() => !sidebarOpen ? toggleSidebar() : setWorkspaceSwitcherOpen(!workspaceSwitcherOpen)}>
           <div className="workspace-logo">{wsLetter}</div>
-          <div className="workspace-info">
-            <span className="workspace-name">{currentWorkspace?.name ?? 'Loading...'}</span>
-            <span className="workspace-plan">Free plan</span>
-          </div>
-          <ChevronDown size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 150ms', transform: workspaceSwitcherOpen ? 'rotate(180deg)' : 'none' }} />
+          {sidebarOpen && (
+            <div className="workspace-info">
+              <span className="workspace-name">{currentWorkspace?.name ?? 'Loading...'}</span>
+              <span className="workspace-plan">Free plan</span>
+            </div>
+          )}
+          {sidebarOpen && <ChevronDown size={14} style={{ color: 'var(--text-muted)', flexShrink: 0, transition: 'transform 150ms', transform: workspaceSwitcherOpen ? 'rotate(180deg)' : 'none' }} />}
         </div>
 
         {/* Workspace Switcher Dropdown */}
@@ -157,12 +177,19 @@ export function Sidebar() {
 
         {/* Nav Items */}
         <div className="sidebar-section">
-          {navItems.map((item) => {
+          {navItems.map((item: any) => {
             const isActive = pathname === item.href;
             return (
               <Link key={item.href} href={item.href} className={`sidebar-nav-item ${isActive ? 'active' : ''}`}>
-                {item.icon}
-                <span style={{ flex: 1 }}>{item.label}</span>
+                <span style={{ flexShrink: 0 }}>{item.icon}</span>
+                {sidebarOpen && (
+                  <>
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {item.badge > 0 && (
+                      <span className="notification-badge" style={{ fontSize: 9, minWidth: 16, height: 16 }}>{item.badge}</span>
+                    )}
+                  </>
+                )}
               </Link>
             );
           })}
@@ -171,7 +198,7 @@ export function Sidebar() {
         {/* Projects */}
         <div className="sidebar-section" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div className="sidebar-section-header">
-            <span>Projects</span>
+            {sidebarOpen && <span>Projects</span>}
             <button
               className="sidebar-icon-btn"
               title="New project"
@@ -184,9 +211,9 @@ export function Sidebar() {
           <div className="scroll-y" style={{ flex: 1 }}>
             {loadingProjects ? (
               <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 12 }}>
-                <Loader2 size={12} className="spin" /> Loading...
+                <Loader2 size={12} className="spin" /> {sidebarOpen && 'Loading...'}
               </div>
-            ) : projects.length === 0 ? (
+            ) : projects.length === 0 && sidebarOpen ? (
               <div style={{ padding: '12px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
                 No projects yet
                 {currentWorkspace && (
@@ -203,11 +230,12 @@ export function Sidebar() {
                     key={project.id}
                     href={`/workspace/${currentWorkspace?.id}/project/${project.id}`}
                     className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                    title={!sidebarOpen ? project.name : undefined}
                   >
                     <span style={{ color: project.color ?? 'var(--accent)', flexShrink: 0 }}>
                       <FolderKanban size={14} />
                     </span>
-                    <span className="truncate-1" style={{ flex: 1 }}>{project.name}</span>
+                    {sidebarOpen && <span className="truncate-1" style={{ flex: 1 }}>{project.name}</span>}
                   </Link>
                 );
               })
@@ -217,25 +245,31 @@ export function Sidebar() {
 
         {/* Settings */}
         <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '8px' }}>
-          <Link href="/settings" className={`sidebar-nav-item ${pathname === '/settings' ? 'active' : ''}`}>
+          <Link href="/settings" className={`sidebar-nav-item ${pathname === '/settings' ? 'active' : ''}`} title={!sidebarOpen ? 'Settings' : undefined}>
             <Settings size={15} />
-            <span>Settings</span>
+            {sidebarOpen && <span>Settings</span>}
           </Link>
         </div>
 
         {/* User Footer */}
         <div className="sidebar-user">
-          <div className="avatar" style={{ width: 32, height: 32, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, flexShrink: 0 }}>
-            {user ? getInitials((user as any).full_name || (user as any).name || user.email) : 'U'}
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {(user as any)?.full_name || (user as any)?.name || 'User'}
+          {(user as any)?.avatar_url ? (
+            <img src={(user as any).avatar_url} alt="avatar" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid var(--accent-soft)' }} />
+          ) : (
+            <div className="avatar" style={{ width: 32, height: 32, fontSize: 12, flexShrink: 0 }}>
+              {user ? getInitials((user as any).full_name || (user as any).name || user.email) : 'U'}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.email || ''}
+          )}
+          {sidebarOpen && (
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {(user as any)?.full_name || (user as any)?.name || 'User'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.email || ''}
+              </div>
             </div>
-          </div>
+          )}
           <button className="sidebar-icon-btn" onClick={handleLogout} title="Logout">
             <LogOut size={14} />
           </button>
@@ -339,17 +373,18 @@ export function Sidebar() {
         }
         .sidebar-workspace:hover { background: var(--bg-hover); }
         .workspace-logo {
-          width: 28px;
-          height: 28px;
+          width: 32px;
+          height: 32px;
           border-radius: var(--radius);
-          background: linear-gradient(135deg, var(--accent), #ff9d85);
+          background: linear-gradient(135deg, #2563eb, #60a5fa);
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 12px;
+          font-size: 13px;
           font-weight: 800;
           color: white;
           flex-shrink: 0;
+          box-shadow: 0 2px 8px rgba(37,99,235,0.3);
         }
         .workspace-info { flex: 1; overflow: hidden; }
         .workspace-name {

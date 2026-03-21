@@ -126,7 +126,7 @@ export default function ProjectPage() {
   const kanbanTasks = tasks.map((t) => ({
     ...t,
     section_id: t.status,
-    assignees: t.assignee ? [{ id: t.assignee_id!, name: (t.assignee as any)?.full_name || 'User', email: (t.assignee as any)?.email || '', avatar_url: (t.assignee as any)?.avatar_url || null, created_at: '' }] : [],
+    assignees: (t.assignees ?? []).map((a) => ({ id: a.id, name: a.full_name ?? a.email, email: a.email, avatar_url: a.avatar_url, created_at: '' })),
     watchers: [], labels: [], subtasks: [], attachments: [], unread_chat_count: 0,
     created_by: t.created_by,
   }));
@@ -228,33 +228,47 @@ export default function ProjectPage() {
   );
 }
 
-// ─── New Task Modal ───────────────────────────────────────────────────────────
+// ─── New Task Modal (multi-assignee) ──────────────────────────────────────────
 
 function NewTaskModal({ projectId, onClose, onCreated }: {
   projectId: string;
   onClose: () => void;
   onCreated: (task: ApiTask) => void;
 }) {
-  const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<ApiTask['priority']>('medium');
-  const [status, setStatus] = useState<ApiTask['status']>('todo');
-  const [dueDate, setDueDate] = useState('');
-  const [assignee, setAssignee] = useState<AssigneeInfo | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [title, setTitle]         = useState('');
+  const [description, setDesc]    = useState('');
+  const [priority, setPriority]   = useState<ApiTask['priority']>('medium');
+  const [status, setStatus]       = useState<ApiTask['status']>('todo');
+  const [dueDate, setDueDate]     = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [assigneeEmails, setAssigneeEmails] = useState<string[]>([]);
+  const [saving, setSaving]       = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const addEmail = () => {
+    const e = emailInput.trim().toLowerCase();
+    if (!e || assigneeEmails.includes(e)) { setEmailInput(''); return; }
+    setAssigneeEmails((prev) => [...prev, e]);
+    setEmailInput('');
+  };
+
+  const removeEmail = (email: string) =>
+    setAssigneeEmails((prev) => prev.filter((e) => e !== email));
+
+  const handleSubmit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
     if (!title.trim()) return;
     setSaving(true);
     try {
+      // Resolve emails → user ids via workspace members list
       const task = await tasksApi.create({
         projectId,
         title: title.trim(),
+        description: description.trim() || undefined,
         priority,
         status,
         dueDate: dueDate || undefined,
-        assigneeId: assignee?.id ?? null,
-      });
+        assigneeEmails,
+      } as any);
       toast.success('Task created!');
       onCreated(task);
     } catch {
@@ -267,35 +281,43 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 10 }}
         onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 400, maxWidth: '90vw' }}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', borderRadius: 'var(--radius-lg)', padding: 24, width: 460, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ fontSize: 15, fontWeight: 700 }}>New Task</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}><X size={16} /></button>
         </div>
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <input
-            autoFocus className="input" placeholder="Task title..."
-            value={title} onChange={(e) => setTitle(e.target.value)}
+          {/* Title */}
+          <input autoFocus className="input" placeholder="Task title *" value={title} onChange={(e) => setTitle(e.target.value)} />
+
+          {/* Description */}
+          <textarea
+            className="input" placeholder="Description (optional)" rows={2}
+            value={description} onChange={(e) => setDesc(e.target.value)}
+            style={{ resize: 'vertical', fontSize: 13 }}
           />
+
+          {/* Priority + Status */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <div>
-              <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Priority</label>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Priority</label>
               <select className="input" value={priority} onChange={(e) => setPriority(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
+                <option value="low">🟢 Low</option>
+                <option value="medium">🔵 Medium</option>
+                <option value="high">🟠 High</option>
+                <option value="urgent">🔴 Urgent</option>
               </select>
             </div>
             <div>
-              <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Status</label>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Status</label>
               <select className="input" value={status} onChange={(e) => setStatus(e.target.value as any)} style={{ padding: '7px 10px', fontSize: 13 }}>
                 <option value="todo">To Do</option>
                 <option value="in_progress">In Progress</option>
@@ -304,18 +326,46 @@ function NewTaskModal({ projectId, onClose, onCreated }: {
               </select>
             </div>
           </div>
+
+          {/* Multi-Assignee — add by email */}
           <div>
-            <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Assign To</label>
-            <AssigneePicker value={assignee} onChange={setAssignee} placeholder="Enter email to assign..." />
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 6 }}>Assignees</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                className="input" placeholder="Add by email..."
+                value={emailInput} onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addEmail())}
+                style={{ flex: 1, fontSize: 13 }}
+              />
+              <button type="button" className="btn btn-secondary" onClick={addEmail} style={{ flexShrink: 0, padding: '6px 12px' }}>
+                <Plus size={13} />
+              </button>
+            </div>
+            {assigneeEmails.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {assigneeEmails.map((email) => (
+                  <div key={email} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--accent-soft)', color: 'var(--accent)', borderRadius: 99, padding: '3px 10px', fontSize: 12, fontWeight: 500 }}>
+                    {email}
+                    <button type="button" onClick={() => removeEmail(email)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', padding: 0 }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Assignees will be notified and can see this task</p>
           </div>
+
+          {/* Due Date */}
           <div>
-            <label className="form-label" style={{ fontSize: 11, marginBottom: 4, display: 'block' }}>Due Date</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 4 }}>Due Date</label>
             <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ padding: '7px 10px', fontSize: 13 }} />
           </div>
+
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={saving || !title.trim()}>
-              {saving ? 'Creating...' : 'Create Task'}
+              {saving ? <><Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> Creating...</> : 'Create Task'}
             </button>
           </div>
         </form>

@@ -38,7 +38,9 @@ export default function MyTasksPage() {
         );
         const allTasks = taskArrays.flat();
         // Filter to tasks assigned to current user
-        const mine = allTasks.filter((t) => t.assignee_id === currentUserId);
+        const mine = allTasks.filter((t) =>
+          (t.assignees ?? []).some((a) => a.id === currentUserId)
+        );
         setTasks(mine);
       } catch {
         setTasks([]);

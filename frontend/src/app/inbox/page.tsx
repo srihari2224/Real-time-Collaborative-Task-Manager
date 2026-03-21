@@ -22,7 +22,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     notificationsApi.list()
-      .then(setNotifications)
+      .then(({ notifications }) => setNotifications(notifications))
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false));
   }, []);

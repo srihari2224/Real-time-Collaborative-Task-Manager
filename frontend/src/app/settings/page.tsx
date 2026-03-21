@@ -3,10 +3,12 @@
 import { useState, useEffect } from 'react';
 import { TopBar } from '@/components/layout/TopBar';
 import { WorkspaceRole } from '@/types';
-import { Trash2, UserPlus, Shield, AlertTriangle, Mail, Globe, Clock, Loader2 } from 'lucide-react';
+import { Trash2, UserPlus, Shield, AlertTriangle, Mail, Loader2, User, Moon, Sun } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { motion } from 'framer-motion';
 import { workspacesApi, type ApiWorkspace, type ApiWorkspaceMember } from '@/lib/apiClient';
+import { useUIStore } from '@/stores/uiStore';
+import Link from 'next/link';
 
 const ROLES: WorkspaceRole[] = ['owner', 'admin', 'member', 'guest'];
 const ROLE_LABELS: Record<WorkspaceRole, string> = {
@@ -17,19 +19,17 @@ const ROLE_LABELS: Record<WorkspaceRole, string> = {
 };
 
 export default function SettingsPage() {
-  // /settings has no workspaceId param — discover from API
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
-
   const [workspace, setWorkspace] = useState<ApiWorkspace | null>(null);
   const [members, setMembers] = useState<ApiWorkspaceMember[]>([]);
   const [loading, setLoading] = useState(true);
-
   const [workspaceName, setWorkspaceName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<WorkspaceRole>('member');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [inviting, setInviting] = useState(false);
+  const { theme, toggleTheme } = useUIStore();
 
   // Load workspace + members — auto-discover workspace since /settings has no URL param
   useEffect(() => {
@@ -122,13 +122,25 @@ export default function SettingsPage() {
         {/* General */}
         <section style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, paddingBottom: 10, borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Globe size={14} style={{ color: 'var(--accent)' }} /> General
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> General
           </h2>
+
+          {/* Profile shortcut */}
+          <Link href="/profile" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius)', marginBottom: 14, textDecoration: 'none', background: 'var(--bg-elevated)', transition: 'all var(--transition)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-subtle)'; e.currentTarget.style.background = 'var(--bg-elevated)'; }}
+          >
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}><User size={16} /></div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Edit Profile & Avatar</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Change your name, photo, or choose an avatar</div>
+            </div>
+            <svg style={{ marginLeft: 'auto', color: 'var(--text-muted)' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          </Link>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div className="form-field">
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Workspace Name
-              </label>
+              <label className="form-label">Workspace Name</label>
               <input
                 className="input"
                 value={workspaceName}
@@ -137,21 +149,26 @@ export default function SettingsPage() {
                 style={{ maxWidth: 400 }}
               />
             </div>
+
+            {/* Appearance */}
             <div className="form-field">
-              <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Timezone
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Clock size={13} style={{ color: 'var(--text-muted)' }} />
-                <select className="input" style={{ maxWidth: 300 }}>
-                  <option>America/New_York (UTC-5)</option>
-                  <option>America/Los_Angeles (UTC-8)</option>
-                  <option>Europe/London (UTC+0)</option>
-                  <option>Asia/Tokyo (UTC+9)</option>
-                  <option>Asia/Kolkata (UTC+5:30)</option>
-                </select>
+              <label className="form-label">Appearance</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => theme !== 'light' && toggleTheme()}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius)', border: `2px solid ${theme === 'light' ? 'var(--accent)' : 'var(--border-default)'}`, background: theme === 'light' ? 'var(--accent-soft)' : 'var(--bg-elevated)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: theme === 'light' ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all var(--transition)', fontFamily: 'var(--font-display)' }}
+                >
+                  <Sun size={14} /> Light
+                </button>
+                <button
+                  onClick={() => theme !== 'dark' && toggleTheme()}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', borderRadius: 'var(--radius)', border: `2px solid ${theme === 'dark' ? 'var(--accent)' : 'var(--border-default)'}`, background: theme === 'dark' ? 'var(--accent-soft)' : 'var(--bg-elevated)', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: theme === 'dark' ? 'var(--accent)' : 'var(--text-secondary)', transition: 'all var(--transition)', fontFamily: 'var(--font-display)' }}
+                >
+                  <Moon size={14} /> Dark
+                </button>
               </div>
             </div>
+
             <div>
               <button onClick={handleSaveGeneral} disabled={saving} className="btn btn-primary" style={{ fontSize: 12.5 }}>
                 {saving ? 'Saving...' : 'Save Changes'}
