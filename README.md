@@ -10,86 +10,6 @@
 
 ---
 
-## 📸 Screenshots
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 073954.png" alt="TaskFlow Screenshot 1" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074045.png" alt="TaskFlow Screenshot 2" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074143.png" alt="TaskFlow Screenshot 3" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074348.png" alt="TaskFlow Screenshot 4" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074422.png" alt="TaskFlow Screenshot 5" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074514.png" alt="TaskFlow Screenshot 6" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074524.png" alt="TaskFlow Screenshot 7" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074534.png" alt="TaskFlow Screenshot 8" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074539.png" alt="TaskFlow Screenshot 9" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074601.png" alt="TaskFlow Screenshot 10" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074656.png" alt="TaskFlow Screenshot 11" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074754.png" alt="TaskFlow Screenshot 12" width="750" />
-</div>
-
-<br/>
-
-<div align="center">
-  <img src="./assets/Screenshot 2026-03-22 074814.png" alt="TaskFlow Screenshot 13" width="750" />
-</div>
-
----
-
 ## 🗂️ Table of Contents
 
 1. [Project Overview](#1-project-overview)
@@ -121,6 +41,92 @@ TaskFlow is a collaborative task management platform where teams create workspac
 | **Real-time chat** | Open task → Chat tab → messages appear live in other tabs/browsers |
 | **Notifications (Inbox)** | Assign a task to yourself → check Inbox for the notification |
 | **My Tasks** | Left sidebar → "My Tasks" → filtered to tasks assigned to you |
+
+---
+
+### 🎬 End-to-End Flow Walkthrough
+
+> Step-by-step: **msrihari2224** creates a workspace → project → task with a full to-do checklist → assigns it to **mnarsimulu66791** → assignee instantly sees it under **My Tasks**.
+
+**Flow context:**
+- 🏢 **Workspace:** Engineering / Development
+- 📁 **Project:** Web Development
+- ✅ **Task Name:** Frontend
+- 📝 **Description:** Develop the user interface of the website. Convert UI/UX designs into a working website using frontend technologies. Connect frontend with backend APIs and ensure the website is responsive and user-friendly.
+- 📋 **To-Do Checklist:**
+  - Setup project (React / HTML / CSS / JS)
+  - Create folder structure
+  - Create Navbar
+  - Create Login Page UI
+  - Create Signup Page UI
+  - Create Dashboard UI
+  - Connect frontend to backend API
+  - Form validation
+  - Error message handling
+  - Make website responsive (mobile + desktop)
+  - Testing in browser
+  - Fix UI bugs
+  - Final review
+- 👤 **Created by:** msrihari2224 → **Assigned to:** mnarsimulu66791
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 073954.png" alt="Step 1 — Sign in" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074045.png" alt="Step 2 — Create Workspace" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074143.png" alt="Step 3 — Create Project" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074348.png" alt="Step 4 — New Task" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074422.png" alt="Step 5 — Task Details" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074514.png" alt="Step 6 — Add Description" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074524.png" alt="Step 7 — Add To-Do List" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074534.png" alt="Step 8 — Assign Member" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074539.png" alt="Step 9 — Task Created on Board" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074601.png" alt="Step 10 — Task Panel Overview" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074656.png" alt="Step 11 — Assignee logs in" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074754.png" alt="Step 12 — Inbox Notification" style="border-radius:12px;width:100%;" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="./assets/Screenshot 2026-03-22 074814.png" alt="Step 13 — My Tasks (assignee view)" style="border-radius:12px;width:100%;" />
+    </td>
+    <td width="50%"></td>
+  </tr>
+</table>
+
+> ✅ Once **msrihari2224** creates and assigns the `Frontend` task, **mnarsimulu66791** immediately sees it in their **My Tasks** section — delivered in real-time via Socket.IO.
 
 ---
 

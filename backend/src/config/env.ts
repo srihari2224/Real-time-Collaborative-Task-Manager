@@ -101,6 +101,8 @@ export const env = {
       fromEmail: value.SES_FROM_EMAIL as string,
       fromName: value.SES_FROM_NAME as string,
       region: value.SES_REGION as string,
+      accessKeyId: value.AWS_ACCESS_KEY_ID as string,
+      secretAccessKey: value.AWS_SECRET_ACCESS_KEY as string,
     },
   },
   jwt: {
