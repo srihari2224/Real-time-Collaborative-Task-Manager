@@ -496,22 +496,11 @@ function KanbanCardCompact({ task, onClick }: { task: KanbanTask; onClick: () =>
       role="button"
       tabIndex={0}
     >
-      <span className="pp-kanban-card-stripe" style={{ background: ps.stripe }} />
+      <span className={`pp-kanban-card-stripe priority-${task.priority}`} />
       <div className="pp-kanban-card-inner">
         <div className="pp-kanban-card-top">
           <h3 className="pp-kanban-card-title">{task.title}</h3>
-          <span
-            className="pp-kanban-pri"
-            style={
-              {
-                color: ps.color,
-                background: ps.bg,
-                border: `1px solid ${ps.border}`,
-              } as CSSProperties
-            }
-          >
-            {task.priority}
-          </span>
+          <span className={`pp-kanban-pri priority-${task.priority}`}>{task.priority}</span>
         </div>
         {task.due_date && (
           <div className={`pp-kanban-due${overdueFlag ? ' overdue' : ''}`}>
@@ -595,18 +584,11 @@ function CalendarView({ tasks, onTaskClick }: { tasks: KanbanTask[]; onTaskClick
                 return (
                   <div
                     key={t.id}
-                    className="pp-cal-task"
+                    className={`pp-cal-task priority-${t.priority}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       onTaskClick(t.id);
                     }}
-                    style={
-                      {
-                        borderLeftColor: ps.stripe,
-                        background: ps.bg,
-                        color: ps.color,
-                      } as CSSProperties
-                    }
                   >
                     {t.title}
                   </div>
@@ -702,24 +684,25 @@ const CSS = `
 .pp-root {
   --pp-font:      'Inter', sans-serif;
   --pp-mono:      'Space Mono', monospace;
-  --pp-bg:        #000000;
-  --pp-surface:   #0a0a0a;
-  --pp-elev:      #111111;
-  --pp-overlay:   #161616;
-  --pp-txt:       #ffffff;
-  --pp-txt2:      #a3a3a3;
-  --pp-muted:     #525252;
-  --pp-border:    rgba(255,255,255,0.06);
-  --pp-border2:   rgba(255,255,255,0.10);
-  --pp-border3:   rgba(255,255,255,0.20);
-  --pp-accent:    #3b82f6;
-  --pp-acc-soft:  rgba(59,130,246,0.12);
-  --pp-radius:    0px;
-  --pp-radius-sm: 0px;
-  --pp-shadow:    0 1px 4px rgba(0,0,0,0.6);
-  --pp-shadow-md: 0 4px 16px rgba(0,0,0,0.6);
-  --pp-glow:      0 0 0 1px rgba(59,130,246,0.4);
-  --pp-t:         150ms cubic-bezier(.4,0,.2,1);
+  /* Use global theme tokens so pp-root follows light/dark */
+  --pp-bg:        var(--bg-base);
+  --pp-surface:   var(--bg-surface);
+  --pp-elev:      var(--bg-elevated, var(--bg-elevated));
+  --pp-overlay:   var(--bg-overlay);
+  --pp-txt:       var(--text-primary);
+  --pp-txt2:      var(--text-secondary);
+  --pp-muted:     var(--text-muted);
+  --pp-border:    var(--border-subtle);
+  --pp-border2:   var(--border-default);
+  --pp-border3:   var(--border-strong);
+  --pp-accent:    var(--accent);
+  --pp-acc-soft:  var(--accent-soft);
+  --pp-radius:    var(--radius);
+  --pp-radius-sm: var(--radius-sm);
+  --pp-shadow:    var(--shadow-sm);
+  --pp-shadow-md: var(--shadow-md);
+  --pp-glow:      var(--shadow-glow);
+  --pp-t:         var(--transition);
   display: flex; flex-direction: column;
   height: 100%; overflow: hidden;
   font-family: var(--pp-font);
@@ -798,6 +781,24 @@ const CSS = `
 .pp-kanban-card-title { font-size: 12.5px; font-weight: 600; color: var(--pp-txt); line-height: 1.35; margin: 0; flex: 1; min-width: 0; letter-spacing: -0.01em; }
 .pp-kanban-pri { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 6px; font-family: var(--pp-mono); flex-shrink: 0; }
 .pp-kanban-due { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; font-family: var(--pp-mono); color: var(--pp-muted); }
+
+/* Priority classes use theme variables */
+.pp-kanban-pri.priority-urgent { color: var(--priority-urgent); background: var(--priority-urgent-soft); border: 1px solid rgba(239,68,68,0.25); }
+.pp-kanban-pri.priority-high { color: var(--priority-high); background: var(--priority-high-soft); border: 1px solid rgba(249,115,22,0.25); }
+.pp-kanban-pri.priority-medium { color: var(--priority-medium); background: var(--priority-medium-soft); border: 1px solid rgba(59,130,246,0.25); }
+.pp-kanban-pri.priority-low { color: var(--priority-low); background: var(--priority-low-soft); border: 1px solid var(--pp-border); }
+
+.pp-kanban-card-stripe.priority-urgent { background: var(--priority-urgent); }
+.pp-kanban-card-stripe.priority-high { background: var(--priority-high); }
+.pp-kanban-card-stripe.priority-medium { background: var(--priority-medium); }
+.pp-kanban-card-stripe.priority-low { background: var(--priority-low); }
+
+/* Calendar task priority styling */
+.pp-cal-task { padding: 6px 8px; border-left: 4px solid transparent; border-radius: 3px; margin-top: 6px; font-size: 12px; }
+.pp-cal-task.priority-urgent { border-left-color: var(--priority-urgent); background: var(--priority-urgent-soft); color: var(--priority-urgent); }
+.pp-cal-task.priority-high { border-left-color: var(--priority-high); background: var(--priority-high-soft); color: var(--priority-high); }
+.pp-cal-task.priority-medium { border-left-color: var(--priority-medium); background: var(--priority-medium-soft); color: var(--priority-medium); }
+.pp-cal-task.priority-low { border-left-color: var(--priority-low); background: var(--priority-low-soft); color: var(--pp-muted); }
 .pp-kanban-due.overdue { color: #ef4444; }
 .pp-kanban-card-foot { padding-top: 6px; border-top: 1px solid var(--pp-border); }
 .pp-kanban-avatars .pp-avatar { width: 20px; height: 20px; font-size: 9px; }

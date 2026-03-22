@@ -223,15 +223,22 @@ export default function SettingsPage() {
                       >
                         {ROLE_LABELS[m.role] ?? m.role}
                       </span>
-                      <button
-                        type="button"
-                        className="st-remove-btn"
-                        onClick={() => handleRemoveMember(m)}
-                        disabled={m.role === 'owner'}
-                        title={m.role === 'owner' ? 'Cannot remove owner' : 'Remove member'}
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      {m.role === 'owner' ? (
+                        <span className="st-remove-btn" title="Cannot remove owner" style={{ opacity: 0.45 }}>
+                          <Trash2 size={13} />
+                        </span>
+                      ) : (
+                        <Trash2
+                          size={14}
+                          strokeWidth={2}
+                          role="button"
+                          aria-label="Remove member"
+                          tabIndex={0}
+                          onClick={() => handleRemoveMember(m)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleRemoveMember(m); }}
+                          style={{ cursor: 'pointer', color: 'var(--text-muted)' }}
+                        />
+                      )}
                     </div>
                   );
                 })}

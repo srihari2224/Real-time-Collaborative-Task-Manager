@@ -40,12 +40,23 @@
   --error-soft:  rgba(239,68,68,0.12);
   --info:        #06b6d4;
   --info-soft:   rgba(6,182,212,0.12);
+  --review:      #a855f7;
+  --review-soft: rgba(168,85,247,0.10);
 
   /* Priority */
   --priority-urgent: #ef4444;
   --priority-high:   #f97316;
   --priority-medium: #3b82f6;
   --priority-low:    #525252;
+  --priority-urgent-soft: rgba(239,68,68,0.10);
+  --priority-high-soft:   rgba(249,115,22,0.10);
+  --priority-medium-soft: rgba(59,130,246,0.10);
+  --priority-low-soft:    rgba(82,82,82,0.06);
+  /* My Tasks specific tokens */
+  --mt-bg: var(--bg-base);
+  --mt-surface: var(--bg-surface);
+  --mt-text: var(--text-primary);
+  --mt-muted: var(--text-muted);
 
   /* Border radius — BRUTALIST: all sharp */
   --radius:    0px;
@@ -108,6 +119,15 @@ html.light {
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.12);
   --shadow-xl: 0 24px 48px rgba(0,0,0,0.15);
   --shadow-glow: 0 0 0 2px rgba(37,99,235,0.3);
+  --priority-urgent-soft: rgba(220,38,38,0.10);
+  --priority-high-soft:   rgba(217,119,6,0.10);
+  --priority-medium-soft: rgba(37,99,235,0.08);
+  --priority-low-soft:    rgba(0,0,0,0.04);
+  /* My Tasks overrides for light */
+  --mt-bg: var(--bg-base);
+  --mt-surface: var(--bg-surface);
+  --mt-text: var(--text-primary);
+  --mt-muted: var(--text-muted);
 }
 
 /* ─── Base Reset ──────────────────────────────────────────────────────────── */
@@ -246,29 +266,7 @@ h1,h2,h3,h4,h5,h6 {
   }
 }
 
-.sidebar-toggle-btn {
-  position: absolute;
-  top: 18px;
-  right: -13px;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-default);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  transition: all var(--transition);
-  z-index: 30;
-  box-shadow: var(--shadow-sm);
-}
-.sidebar-toggle-btn:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
+/* Desktop sidebar inline toggle removed — controlled from TopBar now */
 
 .main-content {
   flex: 1;
@@ -441,17 +439,17 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
 .badge-gray   { background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
 
 /* ─── Priority Badges ─────────────────────────────────────────────────────── */
-.priority-urgent { color: #ef4444; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.25); }
-.priority-high   { color: #f97316; background: rgba(249,115,22,0.10); border: 1px solid rgba(249,115,22,0.25); }
-.priority-medium { color: #3b82f6; background: rgba(59,130,246,0.10); border: 1px solid rgba(59,130,246,0.25); }
-.priority-low    { color: var(--text-muted); background: var(--bg-hover); border: 1px solid var(--border-subtle); }
+.priority-urgent { color: var(--priority-urgent); background: var(--priority-urgent-soft); border: 1px solid rgba( var(--priority-urgent-rgb, 239,68,68), 0.25); }
+.priority-high   { color: var(--priority-high); background: var(--priority-high-soft); border: 1px solid rgba( var(--priority-high-rgb, 249,115,22), 0.25); }
+.priority-medium { color: var(--priority-medium); background: var(--priority-medium-soft); border: 1px solid rgba( var(--priority-medium-rgb, 59,130,246), 0.25); }
+.priority-low    { color: var(--priority-low); background: var(--priority-low-soft); border: 1px solid var(--border-subtle); }
 
 /* ─── Status Chips ────────────────────────────────────────────────────────── */
 .status-todo        { color: var(--text-muted); background: var(--bg-hover); border: 1px solid var(--border-subtle); }
-.status-in_progress { color: #f59e0b; background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.25); }
-.status-in_review   { color: #a855f7; background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.25); }
-.status-done        { color: #22c55e; background: rgba(34,197,94,0.10); border: 1px solid rgba(34,197,94,0.25); }
-.status-cancelled   { color: #ef4444; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.25); }
+.status-in_progress { color: var(--warning); background: var(--warning-soft); border: 1px solid rgba(245,158,11,0.25); }
+.status-in_review   { color: var(--review); background: var(--review-soft); border: 1px solid rgba(168,85,247,0.25); }
+.status-done        { color: var(--success); background: var(--success-soft); border: 1px solid rgba(34,197,94,0.25); }
+.status-cancelled   { color: var(--error); background: var(--error-soft); border: 1px solid rgba(239,68,68,0.25); }
 
 /* ─── Tabs ────────────────────────────────────────────────────────────────── */
 .tab-bar { display: flex; border-bottom: 1px solid var(--border-subtle); gap: 0; }
@@ -690,3 +688,5 @@ select.input { cursor: pointer; appearance: none; background-image: url("data:im
   0%, 100% { opacity: 0.12; }
   50% { opacity: 0.38; }
 }
+
+

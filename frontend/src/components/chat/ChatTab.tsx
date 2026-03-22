@@ -524,9 +524,16 @@ export function ChatTab({ taskId, currentUserId, currentUser, workspaceId }: Cha
                     </ActionBtn>
                   )}
                   {isOwn && (
-                    <ActionBtn onClick={() => deleteMessage(msg.id)} title="Delete" danger>
-                      <Trash2 size={12} />
-                    </ActionBtn>
+                    <Trash2
+                      size={16}
+                      strokeWidth={2}
+                      role="button"
+                      aria-label="Delete"
+                      tabIndex={0}
+                      onClick={() => deleteMessage(msg.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') deleteMessage(msg.id); }}
+                      style={{ cursor: 'pointer', color: 'var(--error)' }}
+                    />
                   )}
                 </div>
               </div>

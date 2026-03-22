@@ -22,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <div className="noise-overlay" aria-hidden="true" />
         <Providers>{children}</Providers>
+        <div className="corner-decor" aria-hidden="true" />
       </body>
     </html>
   );

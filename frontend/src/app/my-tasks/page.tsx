@@ -233,11 +233,11 @@ export default function MyTasksPage() {
             </div>
             <div className="mt-stat-card">
               <span className="mt-stat-label">In Progress</span>
-              <span className="mt-stat-value" style={{ color: '#f59e0b' }}>{inProgressCount}</span>
+              <span className={`mt-stat-value ${inProgressCount > 0 ? 'highlight' : ''}`}>{inProgressCount}</span>
             </div>
             <div className="mt-stat-card">
               <span className="mt-stat-label">Overdue</span>
-              <span className="mt-stat-value" style={{ color: overdueTasks > 0 ? '#ef4444' : 'var(--text-muted)' }}>{overdueTasks}</span>
+              <span className={`mt-stat-value ${overdueTasks > 0 ? 'overdue' : ''}`}>{overdueTasks}</span>
             </div>
           </div>
 
@@ -323,20 +323,17 @@ function TaskCard({ task, onClick, isRecentlyUpdated }: { task: ApiTask; onClick
       tabIndex={0}
     >
       {/* Priority stripe */}
-      <span className="mt-stripe" style={{ background: priority.stripe } as CSSProperties} />
+      <span className={`mt-stripe priority-${task.priority}`} />
 
       <div className="mt-card-inner">
 
         {/* Badges */}
         <div className="mt-badges">
-          <span className="mt-badge" style={{ color: status.color, background: status.bg } as CSSProperties}>
-            <span className="mt-badge-dot" style={{ background: status.dot } as CSSProperties} />
+          <span className={`mt-badge status-${task.status}`}>
+            <span className="mt-badge-dot" />
             {status.label}
           </span>
-          <span
-            className="mt-badge mt-priority-badge"
-            style={{ color: priority.color, background: priority.bg, border: `1px solid ${priority.border}` } as CSSProperties}
-          >
+          <span className={`mt-badge mt-priority-badge priority-${task.priority}`}>
             {priority.label}
           </span>
         </div>
@@ -598,6 +595,30 @@ html.light .mt-root {
 .mt-badge-dot { width: 5px; height: 5px; flex-shrink: 0; display: inline-block; }
 .mt-priority-badge { font-size: 9.5px; }
 
+/* Stat highlights */
+.mt-stat-value.highlight { color: var(--warning); }
+.mt-stat-value.overdue { color: var(--error); }
+
+/* Status badges map to semantic variables */
+.mt-badge.status-todo { color: var(--text-muted); background: var(--bg-hover); border: 1px solid var(--border-subtle); }
+.mt-badge.status-in_progress { color: var(--warning); background: var(--warning-soft); border: 1px solid rgba(245,158,11,0.25); }
+.mt-badge.status-in_review { color: var(--review); background: var(--review-soft); border: 1px solid rgba(168,85,247,0.25); }
+.mt-badge.status-done { color: var(--success); background: var(--success-soft); border: 1px solid rgba(34,197,94,0.25); }
+.mt-badge.status-cancelled { color: var(--error); background: var(--error-soft); border: 1px solid rgba(239,68,68,0.25); }
+.mt-badge .mt-badge-dot { background: currentColor; opacity: 0.9; }
+
+/* Priority badges */
+.mt-priority-badge.priority-urgent { color: var(--priority-urgent); background: var(--priority-urgent-soft); border: 1px solid rgba(239,68,68,0.25); }
+.mt-priority-badge.priority-high { color: var(--priority-high); background: var(--priority-high-soft); border: 1px solid rgba(249,115,22,0.25); }
+.mt-priority-badge.priority-medium { color: var(--priority-medium); background: var(--priority-medium-soft); border: 1px solid rgba(59,130,246,0.25); }
+.mt-priority-badge.priority-low { color: var(--priority-low); background: var(--priority-low-soft); border: 1px solid var(--border-subtle); }
+
+/* Priority stripe classes */
+.mt-stripe.priority-urgent { background: var(--priority-urgent); }
+.mt-stripe.priority-high { background: var(--priority-high); }
+.mt-stripe.priority-medium { background: var(--priority-medium); }
+.mt-stripe.priority-low { background: var(--priority-low); }
+
 /* Title */
 .mt-card-title {
   font-size: 13.5px; font-weight: 700;
@@ -638,9 +659,9 @@ html.light .mt-root {
   color: var(--mt-txt2);
 }
 .mt-date-chip.overdue {
-  background: rgba(239,68,68,0.06);
+  background: var(--error-soft);
   border-color: rgba(239,68,68,0.22);
-  color: #ef4444;
+  color: var(--error);
 }
 
 /* Footer */

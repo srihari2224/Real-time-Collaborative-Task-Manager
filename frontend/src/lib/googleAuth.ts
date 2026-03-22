@@ -27,6 +27,7 @@ interface GoogleIdConfig {
   callback: (response: GoogleCredentialResponse) => void;
   auto_select?: boolean;
   cancel_on_tap_outside?: boolean;
+  use_fedcm_for_prompt?: boolean;
 }
 
 interface GoogleCredentialResponse {
@@ -104,19 +105,10 @@ export function signInWithGoogle(): Promise<{ credential: string; user: GoogleUs
       },
       auto_select: false,
       cancel_on_tap_outside: true,
+      use_fedcm_for_prompt: true,
     });
 
     // Trigger the One Tap / popup
-    window.google.accounts.id.prompt((notification) => {
-      if (notification.isNotDisplayed()) {
-        // One Tap suppressed — fall back to renderButton method isn't applicable here;
-        // For popup suppression on localhost, the credential callback still fires.
-        const reason = notification.getNotDisplayedReason();
-        // Only reject if it's a hard block (e.g., browser settings), not temporary suppression
-        if (reason === 'opt_out_or_no_session') {
-          reject(new Error('Google Sign-In was suppressed or not available. Please try again.'));
-        }
-      }
-    });
+    window.google.accounts.id.prompt();
   });
 }

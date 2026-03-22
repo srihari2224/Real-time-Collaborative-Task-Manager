@@ -140,24 +140,8 @@ export function Sidebar() {
       </AnimatePresence>
 
       {/* ── Sidebar ── */}
-      <motion.nav
-        className={`sidebar${!sidebarOpen ? ' collapsed' : ''}`}
-        animate={{
-          x: isMobile ? (sidebarOpen ? 0 : -300) : 0,
-          width: !isMobile ? (sidebarOpen ? 252 : 58) : 280,
-        }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        style={{ overflow: 'hidden' }}
-      >
-        {/* Desktop collapse toggle */}
-        {!isMobile && (
-          <button className="sidebar-toggle-btn" onClick={toggleSidebar} title="Toggle Sidebar">
-            {sidebarOpen
-              ? <ChevronLeft size={12} />
-              : <ChevronRight size={12} />
-            }
-          </button>
-        )}
+      <nav className={`sidebar${!sidebarOpen ? ' collapsed' : ''}`} style={{ overflow: 'hidden' }}>
+        {/* Desktop collapse toggle removed — topbar toggle controls sidebar */}
 
         {/* Mobile close button */}
         {isMobile && sidebarOpen && (
@@ -350,7 +334,7 @@ export function Sidebar() {
             </>
           )}
         </div>
-      </motion.nav>
+      </nav>
 
       {/* ── Modals ── */}
       <AnimatePresence>

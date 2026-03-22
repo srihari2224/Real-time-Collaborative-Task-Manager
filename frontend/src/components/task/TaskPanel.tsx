@@ -169,14 +169,21 @@ export function TaskPanel() {
                         {title}
                       </h2>
                     )}
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 6 }}>
                       {!isMyTasks && (
-                        <button className="panel-close-btn" onClick={handleDeleteTask} title="Delete Task" style={{ color: '#ef4444' }}>
-                          <Trash2 size={14} />
-                        </button>
+                        <Trash2
+                          size={20}
+                          strokeWidth={2}
+                          role="button"
+                          aria-label="Delete Task"
+                          tabIndex={0}
+                          onClick={handleDeleteTask}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleDeleteTask(); }}
+                          style={{ cursor: 'pointer', color: 'var(--error)' }}
+                        />
                       )}
-                      <button className="panel-close-btn" onClick={closeTaskPanel}>
-                        <X size={14} />
+                      <button className="panel-close-btn" onClick={closeTaskPanel} aria-label="Close panel">
+                        <X size={18} />
                       </button>
                     </div>
                   </div>
@@ -207,15 +214,15 @@ export function TaskPanel() {
                   )}
 
                   {/* Subtask progress */}
-                  {(task.subtask_total ?? 0) > 0 && (
-                    <div style={{ marginBottom: 10 }}>
-                      <div className="panel-progress-header">
-                        <span>Subtasks</span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{task.subtask_done}/{task.subtask_total}</span>
+                    {(task.subtask_total ?? 0) > 0 && (
+                      <div style={{ marginBottom: 10 }} className="section-block">
+                        <div className="panel-progress-header">
+                          <span>Subtasks</span>
+                          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{task.subtask_done}/{task.subtask_total}</span>
+                        </div>
+                        <ProgressBar value={((task.subtask_done ?? 0) / (task.subtask_total ?? 1)) * 100} size="sm" />
                       </div>
-                      <ProgressBar value={((task.subtask_done ?? 0) / (task.subtask_total ?? 1)) * 100} size="sm" />
-                    </div>
-                  )}
+                    )}
 
                   {/* Tabs */}
                   <div className="panel-tab-bar">
@@ -392,7 +399,7 @@ export function TaskPanel() {
               border: none;
               background: transparent;
               font-family: var(--font-display);
-              font-size: 12.5px;
+              font-size: 13px;
               font-weight: 600;
               color: var(--text-muted);
               cursor: pointer;
@@ -618,7 +625,7 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
       </div>
 
       {/* Description */}
-      <div>
+      <div className="section-block">
         <div className="section-label-row">
           <span className="section-label">Description</span>
           {savingDesc && <Loader2 size={11} className="spin" />}
@@ -633,7 +640,7 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
       </div>
 
       {/* Subtasks */}
-      <div>
+      <div className="section-block">
         <div className="section-label-row" style={{ marginBottom: subtasks.length > 0 ? 10 : 8 }}>
           <span className="section-label">Subtasks</span>
           <span style={{ fontSize: 11.5, color: subtasks.length > 0 && doneCount === subtasks.length ? '#22c55e' : 'var(--text-muted)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
@@ -717,7 +724,7 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
       </div>
 
       {/* Links */}
-      <div>
+      <div className="section-block">
         <div className="section-label-row">
           <span className="section-label">Links</span>
           <button
@@ -795,6 +802,11 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
           grid-template-columns: 1fr 1fr;
           gap: 14px;
         }
+        .section-block {
+          padding-top: 12px;
+          border-top: 1px solid var(--border-subtle);
+        }
+        .section-block:first-child { border-top: none; padding-top: 0; }
         .meta-status-badge {
           background: var(--bg-elevated);
           border: 1px solid var(--border-default);
@@ -891,6 +903,8 @@ function OverviewTab({ task, overdue, onUpdate }: { task: ApiTask; overdue: bool
           transition: border-color var(--transition);
         }
         .link-row:hover { border-color: rgba(37,99,235,0.25); }
+        /* Make panel icons adapt to theme and be larger */
+        .panel-tab-item svg, .panel-close-btn svg { color: currentColor; width: 18px; height: 18px; }
       `}</style>
     </div>
   );

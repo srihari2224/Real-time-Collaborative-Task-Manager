@@ -12,6 +12,13 @@ export async function getSocket(): Promise<Socket> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
 
+  if (!token) {
+    console.debug('🔌 Socket.IO: No auth token available, skipping connection.');
+    // Return a dummy/disconnected socket or throw? 
+    // Usually it's better to wait for auth before calling getSocket.
+    throw new Error('No authentication token available');
+  }
+
   const url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
   socket = io(url, {

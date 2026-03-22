@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { Sun, Moon, Bell } from 'lucide-react';
+import { Sun, Moon, Bell, Menu } from 'lucide-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
 import { notificationsApi } from '@/lib/apiClient';
@@ -14,7 +14,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ title, actions }: TopBarProps) {
-  const { theme, toggleTheme } = useUIStore();
+  const { theme, toggleTheme, toggleSidebar } = useUIStore();
   const user = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -35,10 +35,28 @@ export function TopBar({ title, actions }: TopBarProps) {
 
   return (
     <div className="topbar">
+      {/* Sidebar toggle moved to left of title */}
+      <button
+        type="button"
+        className="topbar-icon-btn topbar-left-icon"
+        aria-label="Toggle sidebar"
+        onClick={() => toggleSidebar()}
+      >
+        <Menu size={22} strokeWidth={2} />
+      </button>
       {title && <h1 className="topbar-title">{title}</h1>}
 
       <div className="topbar-actions">
         {actions}
+
+        {/* Sign in / Sign up links */}
+        {!user ? (
+          <>
+            <Link href="/auth" className="topbar-link">Sign in</Link>
+            <span className="topbar-divider" />
+            <Link href="/auth/signup" className="topbar-link btn btn-primary">Sign up</Link>
+          </>
+        ) : null}
 
         {/* Theme toggle */}
         <button
@@ -49,24 +67,16 @@ export function TopBar({ title, actions }: TopBarProps) {
           aria-label="Toggle theme"
         >
           {theme === 'dark'
-            ? <Sun size={15} strokeWidth={1.8} />
-            : <Moon size={15} strokeWidth={1.8} />}
+            ? <Sun size={18} strokeWidth={2} />
+            : <Moon size={18} strokeWidth={2} />}
         </button>
 
         {/* Bell — blue when there are unread notifications */}
         <Link href="/inbox" className="topbar-icon-btn topbar-bell" title="Notifications">
-          <Bell size={15} strokeWidth={1.8} />
+          <Bell size={18} strokeWidth={2} />
         </Link>
 
-        {/* User initials chip — links to settings */}
-        <Link
-          href="/settings"
-          className="topbar-user-chip"
-          title="Settings"
-          aria-label="Go to settings"
-        >
-          {getInitials(displayName || user?.email || 'U')}
-        </Link>
+        {/* Removed duplicate sidebar toggle; left-hand toggle remains */}
       </div>
 
       <style jsx>{`
@@ -109,8 +119,8 @@ export function TopBar({ title, actions }: TopBarProps) {
         }
 
         .topbar-icon-btn {
-          width: 34px;
-          height: 34px;
+          width: 48px;
+          height: 48px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -155,6 +165,21 @@ export function TopBar({ title, actions }: TopBarProps) {
         .topbar-user-chip:hover {
           background: var(--accent, #3b82f6);
           color: #ffffff;
+        }
+        /* Left icon (sidebar) styling — bigger and aligned */
+        .topbar-left-icon { margin-right: 8px; width: 48px; height: 48px; }
+        .topbar-left-icon svg { width: 24px; height: 24px; }
+        /* Make icons larger in topbar actions */
+        .topbar-actions .topbar-icon-btn svg { width: 20px; height: 20px; }
+        .topbar-link {
+          color: var(--text-secondary);
+          text-decoration: none;
+          padding: 6px 10px;
+          font-weight: 700;
+          margin-right: 6px;
+        }
+        .topbar-divider {
+          width: 1px; height: 22px; background: var(--border-subtle); margin: 0 8px; display: inline-block;
         }
       `}</style>
     </div>
