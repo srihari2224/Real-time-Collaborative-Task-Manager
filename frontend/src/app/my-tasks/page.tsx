@@ -38,18 +38,8 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'completed',   label: 'Done' },
 ];
 
-async function fetchMyTasks(userId: string): Promise<ApiTask[]> {
-  const workspaces = await workspacesApi.list();
-  const projectArrays = await Promise.all(
-    workspaces.map((ws) => projectsApi.listByWorkspace(ws.id).catch(() => [] as Awaited<ReturnType<typeof projectsApi.listByWorkspace>>)),
-  );
-  const allProjects = projectArrays.flat();
-  const taskArrays = await Promise.all(
-    allProjects.map((p) => tasksApi.listByProject(p.id).catch(() => [] as ApiTask[])),
-  );
-  return taskArrays
-    .flat()
-    .filter((t) => (t.assignees ?? []).some((a) => a.id === userId));
+async function fetchMyTasks(): Promise<ApiTask[]> {
+  return tasksApi.listMyTasks();
 }
 
 /* ─── Skeleton Card ───────────────────────────────────────────────────────── */
@@ -97,7 +87,7 @@ export default function MyTasksPage() {
 
   const { data, isPending } = useQuery({
     queryKey: ['my-tasks', currentUserId],
-    queryFn: () => fetchMyTasks(currentUserId),
+    queryFn: () => fetchMyTasks(),
     enabled: !!currentUserId,
     staleTime: 60_000,
     gcTime: 300_000,

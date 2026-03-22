@@ -77,8 +77,7 @@ function NetworkAnimation() {
         {edges.map(([a, b], i) => (
           <motion.line
             key={i}
-            x1={nodes[a].cx} y1={nodes[a].cy}
-            x2={nodes[b].cx} y2={nodes[b].cy}
+            initial={{ x1: nodes[a].cx, y1: nodes[a].cy, x2: nodes[b].cx, y2: nodes[b].cy }}
             stroke="url(#nodeGrad)"
             strokeWidth="1"
             strokeOpacity="0.3"
@@ -91,10 +90,8 @@ function NetworkAnimation() {
         {edges.slice(0, 5).map(([a, b], i) => (
           <motion.circle
             key={`pkt-${i}`}
-            cx={nodes[a].cx}
-            cy={nodes[a].cy}
             r={3}
-            initial={{ opacity: 0 }}
+            initial={{ cx: nodes[a].cx, cy: nodes[a].cy, opacity: 0 }}
             fill="#3b82f6"
             filter="url(#glow)"
             animate={{
@@ -116,8 +113,8 @@ function NetworkAnimation() {
           <g key={i}>
             {/* Pulse ring */}
             <motion.circle
-              cx={n.cx} cy={n.cy} r={12}
-              initial={{ r: 8, opacity: 0.5 }}
+              r={12}
+              initial={{ cx: n.cx, cy: n.cy, r: 8, opacity: 0.5 }}
               fill="none"
               stroke="#3b82f6"
               strokeWidth="1"
@@ -126,8 +123,8 @@ function NetworkAnimation() {
             />
             {/* Core dot */}
             <motion.circle
-              cx={n.cx} cy={n.cy} r={5}
-              initial={{ r: 4 }}
+              r={5}
+              initial={{ cx: n.cx, cy: n.cy, r: 4 }}
               fill="url(#nodeGrad)"
               filter="url(#glow)"
               animate={{ r: [4, 6, 4] }}

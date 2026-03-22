@@ -199,6 +199,8 @@ export const projectsApi = {
 // ─── Tasks ───────────────────────────────────────────────────────────────────
 
 export const tasksApi = {
+  listMyTasks: () =>
+    api.get(`${BASE}/tasks/my-tasks`).then(unwrap<ApiTask[]>),
   listByProject: (projectId: string) =>
     api.get(`${BASE}/tasks/project/${projectId}`).then(unwrapPaginated<ApiTask>),
   get: (id: string) => api.get(`${BASE}/tasks/${id}`).then(unwrap<ApiTask>),
