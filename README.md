@@ -1,4 +1,4 @@
-> ⚠️ **Extension Notice:** I have exceeded the original deadline. I am still actively making commits and the project is being completed. Requesting an extension — please see the commit history for detailed progress.
+> ⚠️ **Extension Notice:** I have exceeded the original deadline. I am still actively making commits and the project is being completed. Requesting an extension — please see the commit history for detailed progress. I apologize for the delay.Thank you for considering it.
 
 ---
 
@@ -86,14 +86,7 @@ TaskFlow is a collaborative task management platform where teams create workspac
       <img src="./assets/Screenshot 2026-03-22 074348.png" alt="Step 4 — New Task" style="border-radius:12px;width:100%;" />
     </td>
   </tr>
-  <tr>
-    <td width="50%">
-      <img src="./assets/Screenshot 2026-03-22 074422.png" alt="Step 5 — Task Details" style="border-radius:12px;width:100%;" />
-    </td>
-    <td width="50%">
-      <img src="./assets/Screenshot 2026-03-22 074514.png" alt="Step 6 — Add Description" style="border-radius:12px;width:100%;" />
-    </td>
-  </tr>
+ 
   <tr>
     <td width="50%">
       <img src="./assets/Screenshot 2026-03-22 074524.png" alt="Step 7 — Add To-Do List" style="border-radius:12px;width:100%;" />
@@ -395,13 +388,17 @@ frontend/src/
 
 1. **Authentication is handled entirely by Supabase Auth.** The backend trusts Supabase JWTs and upserts the user on first login — no custom registration flow is built.
 
-2. **Task visibility is enforced at the repository layer, not in the database.** `owner` and `admin` workspace roles see all tasks. `member` role sees only assigned tasks. This avoids complex RLS policies that are hard to test.
+2. **All users are workspace-based.** There is no concept of a personal account outside a workspace. This simplified permission checks across projects and tasks. The trade-off is that onboarding requires creating a workspace first, adding a small friction step for solo users.
 
-3. **Assignees must already have accounts.** If an email doesn't exist in the `users` table, the assignment is silently skipped — no pending-invite state is tracked.
+3. **Task visibility is enforced at the repository layer, not in the database.** `owner` and `admin` workspace roles see all tasks. `member` role sees only assigned tasks. This avoids complex RLS policies that are hard to test.
 
-4. **File uploads require AWS S3.** For local development, uploads fail gracefully (error toast only — no crashes).
+4. **Real-time sync uses last-write-wins.** This is simpler to implement and sufficient for task management where simultaneous field edits are rare. The trade-off is occasional overwrite conflicts between users, handled with a toast notification rather than a merge UI.
 
-5. **No Redis required for local dev.** Socket.IO runs in-process (single instance). Multi-instance horizontal scaling would require the Redis adapter.
+5. **Assignees must already have accounts.** If an email doesn't exist in the `users` table, the assignment is silently skipped — no pending-invite state is tracked.
+
+6. **File uploads require AWS S3.** For local development, uploads fail gracefully (error toast only — no crashes).
+
+7. **No Redis required for local dev.** Socket.IO runs in-process (single instance). Multi-instance horizontal scaling would require the Redis adapter.
 
 ### Trade-offs
 
@@ -414,6 +411,7 @@ frontend/src/
 | **Framer Motion for animations** | Physics-based, consistent transitions | ~80 KB bundle addition |
 | **Optimistic chat send** | Messages feel instant | Shows before server confirmation; removed on error |
 | **Email-based assignee lookup** | Simpler UX (no member dropdowns) | Assignees must already have signed up |
+| **Last-write-wins for concurrent edits** | Simple to implement; sufficient for this use case | Rare but possible silent overwrites when two users edit the same field simultaneously |
 
 ---
 
@@ -456,6 +454,8 @@ frontend/src/
 
 ### What I Used AI For
 
+AI was used to scaffold repetitive boilerplate — route handlers, repository patterns, TypeScript type definitions, and the initial database schema. This saved significant time on structural work, leaving focus for the core product features like the task chat messenger and real-time WebSocket events.
+
 | Area | AI's Role |
 |------|----------|
 | **Initial boilerplate** | Generated Fastify + Socket.IO scaffold, env validation, and layer separation |
@@ -468,6 +468,10 @@ frontend/src/
 
 ### What I Reviewed and Changed Manually
 
+Every AI-generated file went through manual review. The Socket.IO room management logic was rewritten entirely because the AI generated a flat event system with no workspace scoping — events would broadcast to all connected users regardless of workspace. This was restructured into `workspace:{id}` and `task:{id}` rooms. Supabase query patterns were also manually adjusted to use the service role client where the AI had defaulted to the anon client, which caused silent permission failures under RLS.
+
+Other manual review areas:
+
 - **All SQL queries** — verified `ARRAY_AGG` joins before trusting their output shape
 - **Visibility scoping logic** — manually verified member users cannot see unassigned tasks
 - **Socket.IO event dispatch** — ensured events are emitted after the DB write, not before
@@ -477,15 +481,9 @@ frontend/src/
 
 ### One Example Where I Disagreed With AI Output
 
-**The AI initially suggested using Supabase RLS (Row Level Security) for task visibility** — writing policies directly on the `tasks` table so the database would automatically filter by user.
+For Google OAuth integration, the AI suggested using Passport.js with a custom callback strategy and storing sessions in Redis. This approach was rejected because the project was already using Supabase for auth — introducing Passport.js would create two separate auth systems with conflicting session management. The AI's setup was also failing silently during token exchange; the redirect URI was not being handled correctly.
 
-**I disagreed because:**
-- RLS policies are hard to test without a live Supabase connection
-- They create invisible query filters that make debugging confusing
-- The service role client bypasses RLS for admin operations anyway
-- API-layer enforcement in `taskRepository.findByProject` is explicit, co-located with the query, and easy to unit-test in isolation
-
-So I kept RLS disabled and implemented visibility at the repository layer with a conditional `WHERE` clause based on `isOwnerOrAdmin`. Clear, testable, and portable to any PostgreSQL setup.
+The decision was to implement the Google OAuth flow directly through Supabase Auth's built-in provider support. This handled token verification and user creation natively without any additional library, kept the entire auth surface in one place, and eliminated the silent failure that Passport.js was producing.
 
 ---
 

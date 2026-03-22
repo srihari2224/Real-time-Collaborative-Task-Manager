@@ -73,11 +73,12 @@ export function Sidebar() {
   /* Close sidebar on mobile nav */
   const handleNavClick = () => { if (isMobile) setSidebarOpen(false); };
 
-  const calendarHref = currentWorkspace ? `/workspace/${currentWorkspace.id}/calendar` : '#';
+  const currentUserId = user?.id;
+  const calendarHref = currentUserId ? '/my-tasks/calendar' : '#';
 
   const navItems: { href: string; icon: ReactNode; label: string; isActive: boolean; disabled?: boolean }[] = [
     { href: '/my-tasks', icon: <CheckSquare size={14} />, label: 'My Tasks', isActive: pathname === '/my-tasks' },
-    { href: calendarHref, icon: <Calendar size={14} />, label: 'Calendar', isActive: pathname.includes('/calendar'), disabled: !currentWorkspace },
+    { href: calendarHref, icon: <Calendar size={14} />, label: 'Calendar', isActive: pathname === '/my-tasks/calendar' },
   ];
 
   const handleLogout = async () => {

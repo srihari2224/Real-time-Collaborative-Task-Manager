@@ -7,14 +7,17 @@ import * as subtaskRepository from '../repositories/subtaskRepository.js';
 import * as notificationRepository from '../repositories/notificationRepository.js';
 import * as taskLinkRepository from '../repositories/taskLinkRepository.js';
 import * as userRepository from '../repositories/userRepository.js';
+import { sendTaskAssignedEmail } from '../services/emailService.js';
 import { emitToWorkspace, emitToTask } from '../websocket/handler.js';
 import { EVENTS } from '../websocket/events.js';
+import * as commentService from '../services/commentService.js';
+import * as fileService from '../services/fileService.js';
 
 // ─── Tasks ───────────────────────────────────────────────────────────
 
 export const createTask = async (req: FastifyRequest, reply: FastifyReply) => {
   const body = req.body as any;
-  const { assignee_ids, assignee_emails, status: _ignored_status, ...rest } = body;
+  const { assignee_ids, assignee_emails, ...rest } = body;
 
   const task = await taskService.createTask(req.user!.id, rest);
 
@@ -36,6 +39,17 @@ export const createTask = async (req: FastifyRequest, reply: FastifyReply) => {
         title: 'You were assigned a task',
         message: `"${task.title}" was assigned to you by ${assigner.full_name ?? assigner.email}`,
       }).catch(() => null);
+
+      // Send email notification immediately
+      const assignee = await userRepository.findById(uid).catch(() => null);
+      if (assignee?.email) {
+        sendTaskAssignedEmail({
+          to: assignee.email,
+          assignerName: assigner.full_name ?? assigner.email,
+          taskTitle: task.title,
+          dueDate: task.due_date,
+        }).catch(() => null);
+      }
     }
   }
 
@@ -77,7 +91,7 @@ export const getTask = async (req: FastifyRequest, reply: FastifyReply) => {
 export const updateTask = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
   const body = req.body as any;
-  const { assignee_ids, status: _ignored_status, ...rest } = body;
+  const { assignee_ids, ...rest } = body;
 
   const task = await taskService.updateTask(id, rest);
 
@@ -90,6 +104,17 @@ export const updateTask = async (req: FastifyRequest, reply: FastifyReply) => {
         title: 'You were assigned a task',
         message: `"${task.title}" was assigned to you by ${assigner.full_name ?? assigner.email}`,
       }).catch(() => null);
+
+      // Send email notification immediately
+      const assignee = await userRepository.findById(uid).catch(() => null);
+      if (assignee?.email) {
+        sendTaskAssignedEmail({
+          to: assignee.email,
+          assignerName: assigner.full_name ?? assigner.email,
+          taskTitle: task.title,
+          dueDate: task.due_date,
+        }).catch(() => null);
+      }
     }
   }
 
@@ -175,8 +200,6 @@ async function maybeUpdateTaskStatus(taskId: string): Promise<void> {
 
 // ─── Comments ────────────────────────────────────────────────────────
 
-import * as commentService from '../services/commentService.js';
-
 export const addComment = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
   const comment = await commentService.addComment(req.user!.id, id, req.body as any);
@@ -197,8 +220,6 @@ export const deleteComment = async (req: FastifyRequest, reply: FastifyReply) =>
 };
 
 // ─── Attachments ─────────────────────────────────────────────────────
-
-import * as fileService from '../services/fileService.js';
 
 export const uploadAttachment = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
