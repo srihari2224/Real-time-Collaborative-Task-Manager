@@ -64,6 +64,11 @@ export const listTasks = async (req: FastifyRequest, reply: FastifyReply) => {
   return apiResponse.paginated(reply, tasks, pagination);
 };
 
+export const listMyTasks = async (req: FastifyRequest, reply: FastifyReply) => {
+  const tasks = await taskService.listMyTasks(req.user!.id);
+  return apiResponse.success(reply, tasks);
+};
+
 export const getTask = async (req: FastifyRequest, reply: FastifyReply) => {
   const { id } = req.params as { id: string };
   return apiResponse.success(reply, await taskService.getTask(id));

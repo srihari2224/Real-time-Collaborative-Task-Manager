@@ -8,6 +8,7 @@ export default async function taskRoutes(fastify: FastifyInstance) {
 
   // Tasks
   fastify.post('/', tc.createTask);
+  fastify.get('/my-tasks', tc.listMyTasks);
   fastify.get('/project/:projectId', tc.listTasks);
   fastify.get('/:id', tc.getTask);
   fastify.put('/:id', tc.updateTask);

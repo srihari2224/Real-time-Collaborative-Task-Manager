@@ -37,6 +37,10 @@ export const listTasks = async (
   return { tasks, pagination: { page, limit, total } };
 };
 
+export const listMyTasks = async (userId: string) => {
+  return taskRepository.findByAssignee(userId);
+};
+
 export const updateTask = async (id: string, updates: Record<string, unknown>): Promise<Task> => {
   const task = await taskRepository.update(id, updates as any);
   if (!task) throw Object.assign(new Error('Task not found'), { statusCode: 404 });

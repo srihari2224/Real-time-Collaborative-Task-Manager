@@ -168,6 +168,46 @@ export const countByProject = async (
   return (rows[0] as { total: number }).total;
 };
 
+export const findByAssignee = async (userId: string): Promise<RichTask[]> => {
+  const { rows } = await query(
+    `SELECT t.*,
+       c.full_name as created_by_name,
+       COALESCE(cc.comment_count, 0)::int    as comment_count,
+       COALESCE(ac.attachment_count, 0)::int as attachment_count,
+       COALESCE(sc.total, 0)::int            as subtask_total,
+       COALESCE(sc.done, 0)::int             as subtask_done
+     FROM tasks t
+     JOIN users c ON c.id = t.created_by
+     JOIN task_assignees ta ON ta.task_id = t.id
+     LEFT JOIN (SELECT task_id, COUNT(*) AS comment_count FROM task_comments GROUP BY task_id) cc ON cc.task_id = t.id
+     LEFT JOIN (SELECT task_id, COUNT(*) AS attachment_count FROM attachments GROUP BY task_id) ac ON ac.task_id = t.id
+     LEFT JOIN (
+       SELECT task_id,
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE is_done) AS done
+       FROM subtasks GROUP BY task_id
+     ) sc ON sc.task_id = t.id
+     WHERE ta.user_id = $1
+     ORDER BY t.due_date ASC, t.created_at DESC`,
+    [userId]
+  );
+
+  const taskIds = rows.map((r: any) => r.id);
+  if (!taskIds.length) return [];
+  const { rows: assigneeRows } = await query(
+    `SELECT ta.task_id, u.id, u.email, u.full_name, u.avatar_url
+     FROM task_assignees ta JOIN users u ON u.id = ta.user_id
+     WHERE ta.task_id = ANY($1)`,
+    [taskIds]
+  );
+  const assigneeMap: Record<string, any[]> = {};
+  for (const ar of assigneeRows) {
+    if (!assigneeMap[ar.task_id]) assigneeMap[ar.task_id] = [];
+    assigneeMap[ar.task_id].push({ id: ar.id, email: ar.email, full_name: ar.full_name, avatar_url: ar.avatar_url });
+  }
+  return rows.map((r: any) => ({ ...r, assignees: assigneeMap[r.id] ?? [] })) as RichTask[];
+};
+
 export const update = async (
   id: string,
   data: Partial<{ title: string; description: string; status: TaskStatus; priority: TaskPriority; due_date: Date | null; position: number }>
