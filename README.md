@@ -1,4 +1,4 @@
-> ⚠️ **Extension Notice:** I have exceeded the original deadline. I am still actively making commits and the project is being completed. Requesting an extension — please see the commit history for detailed progress. I apologize for the delay.Thank you for considering it.
+> ⚠️ **Extension Notice:** I have submitted the Google Form within the deadline, but made a few additional commits after it. The project is complete as of the latest commit. I sincerely apologize for the delay and any inconvenience caused.
 
 ---
 

@@ -54,6 +54,7 @@ export const createTask = async (req: FastifyRequest, reply: FastifyReply) => {
   }
 
   const rich = await taskRepository.findById(task.id);
+  if (!rich) return apiResponse.error(reply, 'Task not found after creation', 404);
   apiResponse.created(reply, rich, 'Task created');
 
   const workspaceId = await taskRepository.findWorkspaceIdByProjectId(task.project_id).catch(() => null);
@@ -119,6 +120,7 @@ export const updateTask = async (req: FastifyRequest, reply: FastifyReply) => {
   }
 
   const rich = await taskRepository.findById(id);
+  if (!rich) return apiResponse.error(reply, 'Task not found after update', 404);
   apiResponse.success(reply, rich, 'Task updated');
 
   const workspaceId = await taskRepository.findWorkspaceIdByTaskId(id).catch(() => null);

@@ -15,7 +15,7 @@ export const sendTaskAssignedEmail = async (data: {
   to: string;
   assignerName: string;
   taskTitle: string;
-  dueDate?: string | null;
+  dueDate?: Date | string | null;
 }) => {
   const { to, assignerName, taskTitle, dueDate } = data;
   
