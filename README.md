@@ -44,16 +44,16 @@ TaskFlow is a collaborative task management platform where teams create workspac
 
 ---
 
-### 🎬 End-to-End Flow Walkthrough
+### End-to-End Flow Walkthrough
 
 > Step-by-step: **msrihari2224** creates a workspace → project → task with a full to-do checklist → assigns it to **mnarsimulu66791** → assignee instantly sees it under **My Tasks**.
 
 **Flow context:**
-- 🏢 **Workspace:** Engineering / Development
-- 📁 **Project:** Web Development
-- ✅ **Task Name:** Frontend
-- 📝 **Description:** Develop the user interface of the website. Convert UI/UX designs into a working website using frontend technologies. Connect frontend with backend APIs and ensure the website is responsive and user-friendly.
-- 📋 **To-Do Checklist:**
+-  **Workspace:** Engineering / Development
+-  **Project:** Web Development
+-  **Task Name:** Frontend
+-  **Description:** Develop the user interface of the website. Convert UI/UX designs into a working website using frontend technologies. Connect frontend with backend APIs and ensure the website is responsive and user-friendly.
+-  **To-Do Checklist:**
   - Setup project (React / HTML / CSS / JS)
   - Create folder structure
   - Create Navbar
